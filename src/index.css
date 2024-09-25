@@ -1,0 +1,63 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Global styles */
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background-color: #0f172a;  /* Tailwind's slate-900 */
+    color: #e2e8f0;  /* Tailwind's slate-200 */
+  }
+  
+  /* Headings */
+  h1, h2, h3, h4, h5, h6 {
+    color: #00ffff;  /* Cyan color from the logo */
+  }
+  
+  /* Links */
+  a {
+    color: #00ffff;
+    text-decoration: none;
+  }
+  
+  a:hover {
+    text-decoration: underline;
+  }
+  
+  /* Buttons */
+  button, .button {
+    background-color: #00ffff;
+    color: #0f172a;
+    padding: 0.5rem 1rem;
+    border-radius: 0.25rem;
+    font-weight: bold;
+    transition: background-color 0.3s ease;
+  }
+  
+  button:hover, .button:hover {
+    background-color: #00e6e6;
+  }
+  
+  /* Input fields */
+  input, textarea, select {
+    background-color: #1e293b;  /* Tailwind's slate-800 */
+    color: #e2e8f0;  /* Tailwind's slate-200 */
+    border: 1px solid #475569;  /* Tailwind's slate-600 */
+    border-radius: 0.25rem;
+    padding: 0.5rem;
+  }
+  
+  /* Cards or content containers */
+  .card, .container {
+    background-color: #1e293b;  /* Tailwind's slate-800 */
+    border-radius: 0.5rem;
+    padding: 1rem;
+    margin-bottom: 1rem;
+  }
+  
+  /* Utility classes */
+  .text-cyan { color: #00ffff; }
+  .bg-dark { background-color: #0f172a; }
+  .bg-darker { background-color: #020617; }  /* Tailwind's slate-950 */
