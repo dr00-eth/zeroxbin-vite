@@ -7,7 +7,8 @@ import { useWallet } from '../hooks/useWallet';
 function UserPastes() {
   const { wallet, provider, connectedChain, connectWallet } = useWallet();
   const [contract, setContract] = useState(null);
-  const [pastes, setPastes] = useState([]);
+  const [ownPastes, setOwnPastes] = useState([]);
+  const [accessiblePastes, setAccessiblePastes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
@@ -33,8 +34,13 @@ function UserPastes() {
   useEffect(() => {
     if (contract && wallet) {
       fetchUserPastes();
+      fetchAccessiblePastes();
     }
   }, [contract, wallet]);
+
+  const sortPastesByDate = (pastes) => {
+    return pastes.sort((a, b) => new Date(b.creationTime) - new Date(a.creationTime));
+  };
 
   const fetchUserPastes = async () => {
     if (!contract || !wallet) {
@@ -64,15 +70,47 @@ function UserPastes() {
         return {
           id: id.toString(),
           title: paste.title,
-          creationTime: new Date(creationTime * 1000).toLocaleString()
+          creationTime: new Date(creationTime * 1000).toLocaleString(),
+          pasteType: ['Public', 'Paid', 'Private'][Number(paste.pasteType)]
         };
       }));
       console.log("Fetched pastes data:", pastesData);
-      setPastes(pastesData);
+      setOwnPastes(sortPastesByDate(pastesData));
       setLoading(false);
     } catch (err) {
       console.error("Error in fetchUserPastes:", err);
       setError('Error fetching user pastes: ' + err.message);
+      setLoading(false);
+    }
+  };
+
+  const fetchAccessiblePastes = async () => {
+    if (!contract || !wallet) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const account = wallet.accounts[0].address;
+      console.log("Fetching accessible pastes for account:", account);
+      const accessiblePastesData = await contract.getAccessiblePastes(account);
+      console.log("Accessible pastes data:", accessiblePastesData);
+
+      const formattedAccessiblePastes = accessiblePastesData
+        .map(paste => ({
+          id: paste.id.toString(),
+          title: paste.title,
+          creationTime: new Date(Number(paste.creationTime) * 1000).toLocaleString(),
+          pasteType: ['Public', 'Paid', 'Private'][Number(paste.pasteType)],
+          creator: paste.creator
+        }))
+        .filter(paste => paste.creator.toLowerCase() !== account.toLowerCase());
+
+      setAccessiblePastes(sortPastesByDate(formattedAccessiblePastes));
+      setLoading(false);
+    } catch (err) {
+      console.error("Error in fetchAccessiblePastes:", err);
+      setError('Error fetching accessible pastes: ' + err.message);
       setLoading(false);
     }
   };
@@ -98,7 +136,6 @@ function UserPastes() {
 
   if (loading) return <div className="text-center">Loading your pastes...</div>;
   if (error) return <div className="text-red-500 text-center">{error}</div>;
-  if (pastes.length === 0) return <div className="text-center">You haven't created any pastes yet.</div>;
 
   return (
     <div className="shadow-md rounded px-8 pt-6 pb-8 mb-4">
@@ -106,24 +143,49 @@ function UserPastes() {
       {connectedChain && (
         <p className="mb-4">Current network: {getNetworkName(connectedChain.id)}</p>
       )}
-      <ul className="space-y-2">
-        {pastes.map((paste) => (
-          <li key={paste.id} className="border-b pb-2 flex justify-between items-center">
-            <div>
+
+      <h3 className="text-xl font-semibold mb-2">Your Created Pastes</h3>
+      {ownPastes.length === 0 ? (
+        <p>You haven't created any pastes yet.</p>
+      ) : (
+        <ul className="space-y-2 mb-8">
+          {ownPastes.map((paste) => (
+            <li key={paste.id} className="border-b pb-2 flex justify-between items-center">
+              <div>
+                <Link to={`/paste/${paste.id}`} className="text-slate-400 hover:text-blue-700">
+                  {paste.title}
+                </Link>
+                <p className="text-sm text-gray-100">Created: {paste.creationTime}</p>
+                <p className="text-sm text-gray-100">Type: {paste.pasteType}</p>
+              </div>
+              <button
+                onClick={() => handleEdit(paste.id)}
+                className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-1 px-3 rounded focus:outline-none focus:shadow-outline"
+              >
+                Manage
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <h3 className="text-xl font-semibold mb-2">Pastes You Can Access</h3>
+      {accessiblePastes.length === 0 ? (
+        <p>No Private or Paid Pastes are granted to your address.</p>
+      ) : (
+        <ul className="space-y-2">
+          {accessiblePastes.map((paste) => (
+            <li key={paste.id} className="border-b pb-2">
               <Link to={`/paste/${paste.id}`} className="text-slate-400 hover:text-blue-700">
                 {paste.title}
               </Link>
+              <p className="text-sm text-gray-100">Created by: {paste.creator.slice(0, 6)}...{paste.creator.slice(-4)}</p>
               <p className="text-sm text-gray-100">Created: {paste.creationTime}</p>
-            </div>
-            <button
-              onClick={() => handleEdit(paste.id)}
-              className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-1 px-3 rounded focus:outline-none focus:shadow-outline"
-            >
-              Manage
-            </button>
-          </li>
-        ))}
-      </ul>
+              <p className="text-sm text-gray-100">Type: {paste.pasteType}</p>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
