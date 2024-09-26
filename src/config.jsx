@@ -10,6 +10,15 @@ export const NETWORKS = {
     label: 'Arbitrum One',
     rpcUrl: import.meta.env.VITE_ARBITRUM_RPC_URL,
   },
+};
+
+export const UNUSED_NETWORKS = {
+  ARBITRUM_ONE: {
+    id: '0xa4b1',
+    token: 'ETH',
+    label: 'Arbitrum One',
+    rpcUrl: import.meta.env.VITE_ARBITRUM_RPC_URL,
+  },
   ETHEREUM: {
     id: '0x1',
     token: 'ETH',
@@ -31,11 +40,16 @@ export const NETWORKS = {
 };
 
 export const CONTRACT_ADDRESSES = {
+  [NETWORKS.ARBITRUM_ONE.id]: import.meta.env.VITE_ARBITRUM_CONTRACT_ADDRESS
+};
+
+export const UNUSED_CONTRACT_ADDRESSES = {
   [NETWORKS.ARBITRUM_ONE.id]: import.meta.env.VITE_ARBITRUM_CONTRACT_ADDRESS,
   // [NETWORKS.ETHEREUM.id]: import.meta.env.VITE_ETHEREUM_CONTRACT_ADDRESS,
   // [NETWORKS.OPTIMISM.id]: import.meta.env.VITE_OPTIMISM_CONTRACT_ADDRESS,
   // [NETWORKS.BASE.id]: import.meta.env.VITE_BASE_CONTRACT_ADDRESS,
 };
+
 
 export const CONTRACT_ABI = JSON.parse(import.meta.env.VITE_CONTRACT_ABI);
 

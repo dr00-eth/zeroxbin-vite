@@ -28,15 +28,22 @@ function CreatePaste() {
   useEffect(() => {
     const initContract = async () => {
       if (provider && connectedChain) {
-        if (isNetworkSupported(connectedChain.id)) {
-          const contractAddress = getContractAddress(connectedChain.id);
-          const signer = await provider.getSigner();
-          const contractInstance = new ethers.Contract(contractAddress, contractABI, signer);
-          setContract(contractInstance);
-          setError('');
-        } else {
-          setError(`Network ${getNetworkName(connectedChain.id)} is not supported. Please switch to a supported network.`);
+        try {
+          if (isNetworkSupported(connectedChain.id)) {
+            const contractAddress = getContractAddress(connectedChain.id);
+            const signer = await provider.getSigner();
+            const contractInstance = new ethers.Contract(contractAddress, contractABI, signer);
+            setContract(contractInstance);
+            setError('');
+          } else {
+            setError(`Network ${getNetworkName(connectedChain.id)} is not supported. Please switch to a supported network.`);
+          }
+        } catch (err) {
+          console.error("Error initializing contract:", err);
+          setError(`Error initializing contract: ${err.message}`);
         }
+      } else {
+        setContract(null);
       }
     };
 
@@ -135,10 +142,13 @@ function CreatePaste() {
     setLoading(false);
   };
 
+  const isWalletConnected = wallet && provider && connectedChain;
+  const isContractReady = isWalletConnected && contract;
+
   return (
     <div className="shadow-md rounded px-8 pt-6 pb-8 mb-4">
       <h2 className="text-2xl font-bold mb-4">Create New Paste</h2>
-      {!wallet && (
+      {!isWalletConnected && (
         <div className="bg-blue-100 border-l-4 border-blue-500 text-blue-700 p-4 mb-4" role="alert">
           <p className="font-bold">Wallet Not Connected</p>
           <p>Please connect your wallet to create a paste. You can still fill out the form below.</p>
@@ -149,7 +159,6 @@ function CreatePaste() {
       )}
       {error && <p className="text-red-500 mb-4">{error}</p>}
       {success && <p className="text-green-500 mb-4">Paste created successfully!</p>}
-      {error && <p className="text-red-500 mb-4">{error}</p>}
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Title input */}
         <div>
@@ -305,10 +314,10 @@ function CreatePaste() {
         <div>
           <button
             type="submit"
-            disabled={loading || !contract}
-            className={`bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline ${(loading || !contract) ? 'opacity-50 cursor-not-allowed' : ''}`}
+            disabled={loading || !isContractReady}
+            className={`bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline ${(loading || !isContractReady) ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
-            {!contract ? 'Connect Wallet to Create' : loading ? 'Creating...' : 'Create Paste'}
+            {!isWalletConnected ? 'Connect Wallet to Create' : !isContractReady ? 'Initializing...' : loading ? 'Creating...' : 'Create Paste'}
           </button>
         </div>
       </form>
