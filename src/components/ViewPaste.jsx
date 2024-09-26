@@ -7,8 +7,9 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import remarkGfm from 'remark-gfm';
 import { contractAddress, contractABI } from '../contracts/config';
-import { decryptContent, deriveDecryptionKey } from '../utils/CryptoUtils';
+import { decryptContent } from '../utils/CryptoUtils';
 import AccessPaste from './AccessPaste';
+import TipCreator from './TipCreator';
 import styles from '../styles/MarkdownStyles.module.css';
 
 function ViewPaste() {
@@ -40,51 +41,55 @@ function ViewPaste() {
   }, [wallet]);
 
   useEffect(() => {
-    const fetchPasteInfo = async () => {
+    const fetchPasteData = async () => {
       if (!contract || !pasteId || !wallet) {
         setLoading(false);
         return;
       }
 
       try {
-        const info = await contract.getPasteInfo(pasteId);
+        setLoading(true);
+        setError(null);
+
+        const pasteData = await contract.getPasteInfo(pasteId);
         
         const formattedInfo = {
           id: pasteId,
-          creator: info.creator,
-          title: info.title,
-          creationTime: new Date(Number(info.creationTime) * 1000).toLocaleString(),
-          expirationTime: Number(info.expirationTime) === 0 ? 'Never' : new Date(Number(info.expirationTime) * 1000).toLocaleString(),
-          pasteType: ['Public', 'Paid', 'Private'][Number(info.pasteType)],
-          price: ethers.formatEther(info.price),
-          publicKey: info.publicKey,
+          creator: pasteData.creator,
+          title: pasteData.title,
+          creationTime: new Date(Number(pasteData.creationTime) * 1000).toLocaleString(),
+          expirationTime: Number(pasteData.expirationTime) === 0 ? 'Never' : new Date(Number(pasteData.expirationTime) * 1000).toLocaleString(),
+          pasteType: ['Public', 'Paid', 'Private'][Number(pasteData.pasteType)],
+          price: ethers.formatEther(pasteData.price),
+          publicKey: pasteData.publicKey,
         };
 
         setPasteInfo(formattedInfo);
 
         if (formattedInfo.pasteType === 'Public') {
-          await fetchPasteContent();
+          const content = await fetchPasteContent(formattedInfo.pasteType);
+          setPasteContent(content);
+          setHasAccess(true);
         } else {
           setHasAccess(false);
         }
-
-        setLoading(false);
       } catch (err) {
-        console.error('Error fetching paste info:', err);
-        setError('Error fetching paste info: ' + err.message);
+        console.error('Error fetching paste data:', err);
+        setError('Error fetching paste data: ' + err.message);
+      } finally {
         setLoading(false);
       }
     };
 
-    fetchPasteInfo();
+    fetchPasteData();
   }, [contract, pasteId, wallet]);
 
-  const fetchPasteContent = async (signature) => {
-    if (!contract || !pasteId || !pasteInfo) return;
+  const fetchPasteContent = async (pasteType) => {
+    if (!contract || !pasteId) return null;
 
     try {
       let pasteData;
-      if (pasteInfo.pasteType === 'Public') {
+      if (pasteType === 'Public') {
         pasteData = await contract.getPublicPaste(pasteId);
       } else {
         pasteData = await contract.getPrivatePaste(pasteId);
@@ -92,28 +97,26 @@ function ViewPaste() {
       
       let content = ethers.toUtf8String(pasteData.content);
       
-      if (pasteInfo.pasteType !== 'Public') {
-        if (!signature) {
-          throw new Error('Signature required for non-public pastes');
-        }
-        const decryptionKey = await deriveDecryptionKey(pasteInfo.publicKey, signature);
-        content = await decryptContent(content, decryptionKey);
+      if (pasteType !== 'Public') {
+        content = await decryptContent(content, pasteData.publicKey);
       }
       
-      setPasteContent(content);
-      setHasAccess(true);
+      return content;
     } catch (err) {
       console.error('Error fetching paste content:', err);
-      if (err.code === 'CALL_EXCEPTION') {
-        setError('You do not have access to this paste.');
-      } else {
-        setError('Error fetching paste content: ' + err.message);
-      }
+      throw new Error('Error fetching paste content: ' + err.message);
     }
   };
 
-  const handleAccessGranted = async (signature) => {
-    await fetchPasteContent(signature);
+  const handleAccessGranted = async () => {
+    try {
+      const content = await fetchPasteContent(pasteInfo.pasteType);
+      setPasteContent(content);
+      setHasAccess(true);
+    } catch (err) {
+      console.error('Error handling access granted:', err);
+      setError('Error handling access granted: ' + err.message);
+    }
   };
 
   if (!wallet) return <div className="text-center">Please connect your wallet to view this paste.</div>;
@@ -131,17 +134,7 @@ function ViewPaste() {
         <p className="text-sm text-gray-300">Type: {pasteInfo.pasteType}</p>
         {pasteInfo.pasteType !== 'Public' && <p className="text-sm text-gray-600">Price: {pasteInfo.price} ETH</p>}
       </div>
-      {pasteInfo.pasteType !== 'Public' && !hasAccess && (
-        <AccessPaste
-          contract={contract}
-          pasteId={pasteId}
-          pasteType={pasteInfo.pasteType}
-          price={pasteInfo.price}
-          publicKey={pasteInfo.publicKey}
-          onAccessGranted={handleAccessGranted}
-        />
-      )}
-      {(hasAccess || pasteInfo.pasteType === 'Public') && pasteContent && (
+      {hasAccess && pasteContent ? (
         <div className={`bg-gray-100 p-4 rounded overflow-x-auto mb-4 ${styles['markdown-body']}`}>
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
@@ -162,13 +155,38 @@ function ViewPaste() {
                     {children}
                   </code>
                 )
+              },
+              table({node, ...props}) {
+                return (
+                  <table className="border-collapse table-auto w-full text-sm" {...props} />
+                )
+              },
+              th({node, ...props}) {
+                return (
+                  <th className="border-b dark:border-slate-600 font-medium p-4 pl-8 pt-0 pb-3 text-slate-400 dark:text-slate-200 text-left" {...props} />
+                )
+              },
+              td({node, ...props}) {
+                return (
+                  <td className="border-b border-slate-100 dark:border-slate-700 p-4 pl-8 text-slate-500 dark:text-slate-400" {...props} />
+                )
               }
             }}
           >
             {pasteContent}
           </ReactMarkdown>
         </div>
+      ) : (
+        <AccessPaste
+          contract={contract}
+          pasteId={pasteId}
+          pasteType={pasteInfo.pasteType}
+          price={pasteInfo.price}
+          publicKey={pasteInfo.publicKey}
+          onAccessGranted={handleAccessGranted}
+        />
       )}
+      <TipCreator pasteId={pasteId} creator={pasteInfo.creator} />
     </div>
   );
 }
