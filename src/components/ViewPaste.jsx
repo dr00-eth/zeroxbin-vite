@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useConnectWallet } from '@web3-onboard/react';
 import { ethers } from 'ethers';
 import ReactMarkdown from 'react-markdown';
@@ -11,29 +11,31 @@ import { decryptContent } from '../utils/CryptoUtils';
 import AccessPaste from './AccessPaste';
 import TipCreator from './TipCreator';
 import styles from '../styles/MarkdownStyles.module.css';
+import { RPC_URL } from '../config';
 
 function ViewPaste() {
   const { id: pasteId } = useParams();
-  const [{ wallet }] = useConnectWallet();
+  const navigate = useNavigate();
+  const [{ wallet }, connect] = useConnectWallet();
   const [contract, setContract] = useState(null);
   const [pasteInfo, setPasteInfo] = useState(null);
   const [pasteContent, setPasteContent] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [hasAccess, setHasAccess] = useState(false);
+  const [isOwner, setIsOwner] = useState(false);
 
   useEffect(() => {
     const initContract = async () => {
-      if (wallet?.provider) {
-        try {
-          const provider = new ethers.BrowserProvider(wallet.provider);
-          const signer = await provider.getSigner();
-          const contractInstance = new ethers.Contract(contractAddress, contractABI, signer);
-          setContract(contractInstance);
-        } catch (err) {
-          console.error("Error initializing contract:", err);
-          setError('Error initializing contract: ' + err.message);
-        }
+      try {
+        const provider = wallet?.provider 
+          ? new ethers.BrowserProvider(wallet.provider)
+          : new ethers.JsonRpcProvider(RPC_URL);
+        const contractInstance = new ethers.Contract(contractAddress, contractABI, provider);
+        setContract(contractInstance);
+      } catch (err) {
+        console.error("Error initializing contract:", err);
+        setError('Error initializing contract: ' + err.message);
       }
     };
 
@@ -42,7 +44,7 @@ function ViewPaste() {
 
   useEffect(() => {
     const fetchPasteData = async () => {
-      if (!contract || !pasteId || !wallet) {
+      if (!contract || !pasteId) {
         setLoading(false);
         return;
       }
@@ -73,6 +75,10 @@ function ViewPaste() {
         } else {
           setHasAccess(false);
         }
+
+        if (wallet && wallet.accounts[0].address.toLowerCase() === formattedInfo.creator.toLowerCase()) {
+          setIsOwner(true);
+        }
       } catch (err) {
         console.error('Error fetching paste data:', err);
         setError('Error fetching paste data: ' + err.message);
@@ -82,7 +88,7 @@ function ViewPaste() {
     };
 
     fetchPasteData();
-  }, [contract, pasteId, wallet]);
+  }, [contract, pasteId]);
 
   const fetchPasteContent = async (pasteType) => {
     if (!contract || !pasteId) return null;
@@ -92,6 +98,9 @@ function ViewPaste() {
       if (pasteType === 'Public') {
         pasteData = await contract.getPublicPaste(pasteId);
       } else {
+        if (!wallet) {
+          throw new Error('Wallet connection required for non-public pastes');
+        }
         pasteData = await contract.getPrivatePaste(pasteId);
       }
       
@@ -119,7 +128,14 @@ function ViewPaste() {
     }
   };
 
-  if (!wallet) return <div className="text-center">Please connect your wallet to view this paste.</div>;
+  const handleConnectWallet = async () => {
+    await connect();
+  };
+
+  const handleEdit = () => {
+    navigate(`/edit-paste/${pasteId}`);
+  };
+
   if (loading) return <div className="text-center">Loading...</div>;
   if (error) return <div className="text-red-500 text-center">{error}</div>;
   if (!pasteInfo) return <div className="text-center">No paste found</div>;
@@ -127,6 +143,14 @@ function ViewPaste() {
   return (
     <div className="shadow-md rounded px-8 pt-6 pb-8 mb-4">
       <h2 className="text-2xl font-bold mb-4">{pasteInfo.title}</h2>
+      {isOwner && (
+          <button
+            onClick={handleEdit}
+            className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+          >
+            Manage Paste
+          </button>
+        )}
       <div className="mb-4">
         <p className="text-sm text-gray-300">Created by: {pasteInfo.creator}</p>
         <p className="text-sm text-gray-300">Created at: {pasteInfo.creationTime}</p>
@@ -177,16 +201,30 @@ function ViewPaste() {
           </ReactMarkdown>
         </div>
       ) : (
-        <AccessPaste
-          contract={contract}
-          pasteId={pasteId}
-          pasteType={pasteInfo.pasteType}
-          price={pasteInfo.price}
-          publicKey={pasteInfo.publicKey}
-          onAccessGranted={handleAccessGranted}
-        />
+        <>
+          {!wallet ? (
+            <div className="mb-4">
+              <p>This paste requires wallet connection to access.</p>
+              <button
+                onClick={handleConnectWallet}
+                className="mt-2 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+              >
+                Connect Wallet
+              </button>
+            </div>
+          ) : (
+            <AccessPaste
+              contract={contract}
+              pasteId={pasteId}
+              pasteType={pasteInfo.pasteType}
+              price={pasteInfo.price}
+              publicKey={pasteInfo.publicKey}
+              onAccessGranted={handleAccessGranted}
+            />
+          )}
+        </>
       )}
-      <TipCreator pasteId={pasteId} creator={pasteInfo.creator} />
+      {wallet && <TipCreator pasteId={pasteId} creator={pasteInfo.creator} />}
     </div>
   );
 }

@@ -1,52 +1,53 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useConnectWallet } from '@web3-onboard/react';
+import { Link } from 'react-router-dom';
+import { FileText, DollarSign, Lock, Shield } from 'lucide-react';
 
-function Home() {
-  const navigate = useNavigate();
-  const [{ wallet, connecting }, connect, disconnect] = useConnectWallet();
+const FeatureItem = ({ icon, text }) => (
+  <li className="flex items-center mb-2">
+    {icon}
+    <span className="ml-2">{text}</span>
+  </li>
+);
 
-  const handleConnect = async () => {
-    if (wallet) {
-      navigate('/create');
-    } else {
-      const connected = await connect();
-      if (connected[0]) {
-        navigate('/create');
-      }
-    }
-  };
-
+export default function Home() {
   return (
-    <div className="max-w-3xl mx-auto text-center">
-      <h1 className="text-4xl font-bold mb-4">Welcome to 0xBin</h1>
-      <p className="text-xl mb-8">
-        0xBin is a decentralized pastebin service built with EVM. 
-        Create, share, and access pastes with the power of blockchain technology.
-      </p>
-      <div className="space-y-4">
-        <h2 className="text-2xl font-semibold">Features:</h2>
-        <ul className="list-disc list-inside text-left">
-          <li>Create public, paid, and private pastes</li>
-          <li>Set access prices/addresses for your pastes</li>
-          <li>Tip paste creators</li>
-          <li>Fully decentralized and censorship-resistant</li>
-        </ul>
+    <div className="flex flex-col flex-grow bg-gray-900 text-white">
+      <div className="flex-grow flex items-center justify-center">
+        <div className="max-w-4xl w-full px-4 py-8">
+          <h1 className="text-5xl font-bold mb-6 text-center text-cyan-400">Welcome to 0xBin</h1>
+          <p className="text-xl mb-10 text-center">
+            0xBin is a decentralized pastebin service built with EVM. Create, share, and access
+            pastes with the power of blockchain technology.
+          </p>
+          <div className="bg-gray-800 rounded-lg p-8 mb-10 shadow-lg">
+            <h2 className="text-3xl font-semibold mb-6 text-center text-cyan-300">Features:</h2>
+            <div className="grid md:grid-cols-2 gap-4">
+              <ul className="space-y-4">
+                <FeatureItem icon={<FileText className="text-cyan-400" />} text="Create public, paid, and private pastes" />
+                <FeatureItem icon={<DollarSign className="text-cyan-400" />} text="Set access prices/addresses for your pastes" />
+              </ul>
+              <ul className="space-y-4">
+                <FeatureItem icon={<Lock className="text-cyan-400" />} text="Tip paste creators" />
+                <FeatureItem icon={<Shield className="text-cyan-400" />} text="Fully decentralized and censorship-resistant" />
+              </ul>
+            </div>
+          </div>
+          <div className="flex justify-center space-x-4">
+            <Link
+              to="/explore"
+              className="bg-blue-500 hover:bg-blue-600 text-white px-8 py-4 rounded-lg text-lg font-semibold transition duration-300 ease-in-out transform hover:-translate-y-1 hover:shadow-lg"
+            >
+              Explore Pastes
+            </Link>
+            <Link
+              to="/create"
+              className="bg-green-500 hover:bg-green-600 text-white px-8 py-4 rounded-lg text-lg font-semibold transition duration-300 ease-in-out transform hover:-translate-y-1 hover:shadow-lg"
+            >
+              Create Paste
+            </Link>
+          </div>
+        </div>
       </div>
-      <button 
-        onClick={handleConnect}
-        disabled={connecting}
-        className={`mt-8 bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-lg text-lg font-semibold ${connecting ? 'opacity-50 cursor-not-allowed' : ''}`}
-      >
-        {wallet ? 'Go to Create Paste' : connecting ? 'Connecting...' : 'Connect Wallet to Get Started'}
-      </button>
-      {wallet && (
-        <p className="mt-4 text-sm text-gray-300">
-          Connected with {wallet.label}
-        </p>
-      )}
     </div>
   );
 }
-
-export default Home;

@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { BrowserRouter as Router, Route, Routes, Link } from 'react-router-dom';
 import { Web3OnboardProvider } from '@web3-onboard/react';
 import logo from './assets/0xbin-logo.png';
@@ -9,6 +9,7 @@ import ViewPaste from './components/ViewPaste';
 import UserPastes from './components/UserPastes';
 import ConnectWallet from './components/ConnectWallet';
 import ExplorePastes from './components/ExplorePastes';
+import EditPaste from './components/EditPaste';
 
 import { web3Onboard } from './config';
 import { useWallet } from './hooks/useWallet';
@@ -16,12 +17,6 @@ import { CHAIN_NAME } from './config';
 
 function AppContent() {
   const { wallet, chainCorrect, connectWallet, switchNetwork } = useWallet();
-
-  useEffect(() => {
-    if (wallet && !chainCorrect) {
-      switchNetwork();
-    }
-  }, [wallet, chainCorrect, switchNetwork]);
 
   return (
     <Router>
@@ -37,8 +32,10 @@ function AppContent() {
                 <div className="hidden md:flex items-center space-x-1">
                   <Link to="/" className="py-4 px-2 text-cyan-300 hover:text-cyan-500 transition duration-300">Home</Link>
                   <Link to="/create" className="py-4 px-2 text-cyan-300 hover:text-cyan-500 transition duration-300">Create Paste</Link>
-                  <Link to="/my-pastes" className="py-4 px-2 text-cyan-300 hover:text-cyan-500 transition duration-300">My Pastes</Link>
                   <Link to="/explore" className="py-4 px-2 text-cyan-300 hover:text-cyan-500 transition duration-300">Explore Pastes</Link>
+                  {wallet && (
+                    <Link to="/my-pastes" className="py-4 px-2 text-cyan-300 hover:text-cyan-500 transition duration-300">My Pastes</Link>
+                  )}
                 </div>
               </div>
               <div className="hidden md:flex items-center space-x-3">
@@ -70,6 +67,7 @@ function AppContent() {
             <Route path="/explore" element={<ExplorePastes />} />
             <Route path="/my-pastes" element={<UserPastes />} />
             <Route path="/paste/:id" element={<ViewPaste />} />
+            <Route path="/edit-paste/:id" element={<EditPaste />} />
           </Routes>
         </div>
       </div>

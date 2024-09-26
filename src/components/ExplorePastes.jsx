@@ -3,6 +3,7 @@ import { useConnectWallet } from '@web3-onboard/react';
 import { ethers } from 'ethers';
 import { Link } from 'react-router-dom';
 import { contractAddress, contractABI } from '../contracts/config';
+import { RPC_URL } from '../config';
 
 function ExplorePastes() {
   const [{ wallet }] = useConnectWallet();
@@ -17,11 +18,15 @@ function ExplorePastes() {
 
   useEffect(() => {
     const initContract = async () => {
-      if (wallet?.provider) {
-        const provider = new ethers.BrowserProvider(wallet.provider);
-        const signer = await provider.getSigner();
-        const contractInstance = new ethers.Contract(contractAddress, contractABI, signer);
+      try {
+        const provider = wallet?.provider 
+          ? new ethers.BrowserProvider(wallet.provider) 
+          : new ethers.JsonRpcProvider(RPC_URL);
+        const contractInstance = new ethers.Contract(contractAddress, contractABI, provider);
         setContract(contractInstance);
+      } catch (err) {
+        console.error('Error initializing contract:', err);
+        setError('Error initializing contract: ' + err.message);
       }
     };
 
@@ -32,14 +37,13 @@ function ExplorePastes() {
     if (contract) {
       fetchPastes();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contract, currentPage, pageSize, searchTerm]);
 
   const fetchPastes = async () => {
     setLoading(true);
     try {
       const offset = (currentPage - 1) * pageSize;
-      const pastesData = await contract.getPublicPastes(offset, pageSize * 2); // Fetch double to account for potential expired pastes
+      const pastesData = await contract.getPublicPastes(offset, pageSize * 2);
 
       const currentTimestamp = Math.floor(Date.now() / 1000);
       const formattedPastes = pastesData
@@ -61,7 +65,6 @@ function ExplorePastes() {
           price: ethers.formatEther(paste.price),
         }));
 
-      // Filter pastes based on search term
       const filteredPastes = formattedPastes.filter(
         paste =>
           paste.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -70,7 +73,7 @@ function ExplorePastes() {
 
       setPastes(filteredPastes.slice(0, pageSize));
       setHasMore(filteredPastes.length > pageSize);
-      setError(null); // Reset error state if successful
+      setError(null);
     } catch (err) {
       console.error('Error fetching pastes:', err);
       setError('Error fetching pastes: ' + err.message);
@@ -107,8 +110,8 @@ function ExplorePastes() {
     }
   };
 
-  if (!wallet)
-    return <div className="text-center">Please connect your wallet to explore pastes.</div>;
+  // if (!wallet)
+  //   return <div className="text-center">Please connect your wallet to explore pastes.</div>;
 
   return (
     <div className="container mx-auto px-4">

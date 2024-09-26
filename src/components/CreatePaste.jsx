@@ -133,6 +133,12 @@ function CreatePaste() {
   return (
     <div className="shadow-md rounded px-8 pt-6 pb-8 mb-4">
       <h2 className="text-2xl font-bold mb-4">Create New Paste</h2>
+      {!wallet && (
+        <div className="bg-blue-100 border-l-4 border-blue-500 text-blue-700 p-4 mb-4" role="alert">
+          <p className="font-bold">Wallet Not Connected</p>
+          <p>Please connect your wallet to create a paste. You can still fill out the form below.</p>
+        </div>
+      )}
       {success && <p className="text-green-500 mb-4">Paste created successfully!</p>}
       {error && <p className="text-red-500 mb-4">{error}</p>}
       <form onSubmit={handleSubmit} className="space-y-4">

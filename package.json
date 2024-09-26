@@ -20,6 +20,7 @@
     "axios": "^1.7.7",
     "ethers": "^6.13.2",
     "lodash": "^4.17.21",
+    "lucide-react": "^0.446.0",
     "react": "^18.3.1",
     "react-datepicker": "^7.4.0",
     "react-dom": "^18.3.1",
@@ -27,6 +28,8 @@
     "react-router-dom": "^6.26.2",
     "react-syntax-highlighter": "^15.5.0",
     "remark-gfm": "^4.0.0",
+    "sweetalert2": "^11.14.1",
+    "ui": "github:shadcn/ui",
     "unist-util-visit": "^5.0.0"
   },
   "devDependencies": {

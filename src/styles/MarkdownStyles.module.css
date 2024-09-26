@@ -17,10 +17,10 @@
   }
   
   .markdown-body h1 { font-size: 2em; color: #000; border-bottom: 1px solid #eaecef; padding-bottom: 0.3em; }
-  .markdown-body h2 { font-size: 1.5em; border-bottom: 1px solid #eaecef; padding-bottom: 0.3em; }
-  .markdown-body h3 { font-size: 1.25em; }
-  .markdown-body h4 { font-size: 1em; }
-  .markdown-body h5 { font-size: 0.875em; }
+  .markdown-body h2 { font-size: 1.5em; color: #1e293b; border-bottom: 1px solid #eaecef; padding-bottom: 0.3em; }
+  .markdown-body h3 { font-size: 1.25em; color: #1e293b; }
+  .markdown-body h4 { font-size: 1em; color: #1e293b; }
+  .markdown-body h5 { font-size: 0.875em; color: #1e293b; }
   .markdown-body h6 { font-size: 0.85em; color: #6a737d; }
   
   .markdown-body p { margin-bottom: 16px; }
