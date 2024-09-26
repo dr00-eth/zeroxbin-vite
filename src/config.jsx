@@ -6,8 +6,8 @@ const injected = injectedModule();
 export const RPC_URL = import.meta.env.VITE_RPC_URL;
 export const CONTRACT_ADDRESS = import.meta.env.VITE_CONTRACT_ADDRESS;
 export const CONTRACT_ABI = JSON.parse(import.meta.env.VITE_CONTRACT_ABI);
-export const CHAIN_ID = '0x66eee'; // Arbitrum Sepolia chain ID
-export const CHAIN_NAME = 'Arbitrum Sepolia';
+export const CHAIN_ID = '0xa4b1'; // Arbitrum chain ID
+export const CHAIN_NAME = 'Arbitrum One';
 
 export const chains = [
   {
