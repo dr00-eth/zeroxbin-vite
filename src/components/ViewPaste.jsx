@@ -6,6 +6,7 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import remarkGfm from 'remark-gfm';
 import { getContractAddress, contractABI, isNetworkSupported, getNetworkName } from '../contracts/config';
+import { NETWORKS } from '../config';
 import { decryptContent } from '../utils/CryptoUtils';
 import AccessPaste from './AccessPaste';
 import TipCreator from './TipCreator';
@@ -23,84 +24,87 @@ function ViewPaste() {
   const [error, setError] = useState(null);
   const [hasAccess, setHasAccess] = useState(false);
   const [isOwner, setIsOwner] = useState(false);
+  const [selectedNetwork, setSelectedNetwork] = useState(Object.values(NETWORKS)[0].id);
 
   useEffect(() => {
-    const initContract = async () => {
-      if (provider && connectedChain) {
-        if (isNetworkSupported(connectedChain.id)) {
-          const contractAddress = getContractAddress(connectedChain.id);
-          const contractInstance = new ethers.Contract(contractAddress, contractABI, provider);
-          setContract(contractInstance);
-          setError(null);
-        } else {
-          setError(`Network ${getNetworkName(connectedChain.id)} is not supported. Please switch to a supported network.`);
-        }
-      }
-    };
-
     initContract();
-  }, [provider, connectedChain]);
+  }, [provider, connectedChain, selectedNetwork]);
 
-  useEffect(() => {
-    const fetchPasteData = async () => {
-      if (!contract || !pasteId) {
-        setLoading(false);
-        return;
+  const initContract = async () => {
+    let contractProvider;
+    let networkId;
+
+    if (provider && connectedChain && isNetworkSupported(connectedChain.id)) {
+      contractProvider = provider;
+      networkId = connectedChain.id;
+    } else {
+      const network = Object.values(NETWORKS).find(net => net.id === selectedNetwork);
+      contractProvider = new ethers.JsonRpcProvider(network.rpcUrl);
+      networkId = network.id;
+    }
+
+    const contractAddress = getContractAddress(networkId);
+    const contractInstance = new ethers.Contract(contractAddress, contractABI, contractProvider);
+    setContract(contractInstance);
+    fetchPasteData(contractInstance);
+  };
+
+  const fetchPasteData = async (contractInstance) => {
+    if (!contractInstance || !pasteId) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      const pasteData = await contractInstance.getPasteInfo(pasteId);
+      
+      const formattedInfo = {
+        id: pasteId,
+        creator: pasteData.creator,
+        title: pasteData.title,
+        creationTime: new Date(Number(pasteData.creationTime) * 1000).toLocaleString(),
+        expirationTime: Number(pasteData.expirationTime) === 0 ? 'Never' : new Date(Number(pasteData.expirationTime) * 1000).toLocaleString(),
+        pasteType: ['Public', 'Paid', 'Private'][Number(pasteData.pasteType)],
+        price: ethers.formatEther(pasteData.price),
+        publicKey: pasteData.publicKey,
+      };
+
+      setPasteInfo(formattedInfo);
+
+      if (formattedInfo.pasteType === 'Public') {
+        const content = await fetchPasteContent(contractInstance, formattedInfo.pasteType);
+        setPasteContent(content);
+        setHasAccess(true);
+      } else {
+        setHasAccess(false);
       }
 
-      try {
-        setLoading(true);
-        setError(null);
-
-        const pasteData = await contract.getPasteInfo(pasteId);
-        
-        const formattedInfo = {
-          id: pasteId,
-          creator: pasteData.creator,
-          title: pasteData.title,
-          creationTime: new Date(Number(pasteData.creationTime) * 1000).toLocaleString(),
-          expirationTime: Number(pasteData.expirationTime) === 0 ? 'Never' : new Date(Number(pasteData.expirationTime) * 1000).toLocaleString(),
-          pasteType: ['Public', 'Paid', 'Private'][Number(pasteData.pasteType)],
-          price: ethers.formatEther(pasteData.price),
-          publicKey: pasteData.publicKey,
-        };
-
-        setPasteInfo(formattedInfo);
-
-        if (formattedInfo.pasteType === 'Public') {
-          const content = await fetchPasteContent(formattedInfo.pasteType);
-          setPasteContent(content);
-          setHasAccess(true);
-        } else {
-          setHasAccess(false);
-        }
-
-        if (wallet && wallet.accounts[0].address.toLowerCase() === formattedInfo.creator.toLowerCase()) {
-          setIsOwner(true);
-        }
-      } catch (err) {
-        console.error('Error fetching paste data:', err);
-        setError('Error fetching paste data: ' + err.message);
-      } finally {
-        setLoading(false);
+      if (wallet && wallet.accounts[0].address.toLowerCase() === formattedInfo.creator.toLowerCase()) {
+        setIsOwner(true);
       }
-    };
+    } catch (err) {
+      console.error('Error fetching paste data:', err);
+      setError('Paste not found on this network. Try selecting a different network.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    fetchPasteData();
-  }, [contract, pasteId, wallet]);
-
-  const fetchPasteContent = async (pasteType) => {
-    if (!contract || !pasteId) return null;
+  const fetchPasteContent = async (contractInstance, pasteType) => {
+    if (!contractInstance || !pasteId) return null;
 
     try {
       let pasteData;
       if (pasteType === 'Public') {
-        pasteData = await contract.getPublicPaste(pasteId);
+        pasteData = await contractInstance.getPublicPaste(pasteId);
       } else {
         if (!wallet) {
           throw new Error('Wallet connection required for non-public pastes');
         }
-        pasteData = await contract.getPrivatePaste(pasteId);
+        pasteData = await contractInstance.getPrivatePaste(pasteId);
       }
       
       let content = ethers.toUtf8String(pasteData.content);
@@ -118,7 +122,7 @@ function ViewPaste() {
 
   const handleAccessGranted = async () => {
     try {
-      const content = await fetchPasteContent(pasteInfo.pasteType);
+      const content = await fetchPasteContent(contract, pasteInfo.pasteType);
       setPasteContent(content);
       setHasAccess(true);
     } catch (err) {
@@ -131,8 +135,29 @@ function ViewPaste() {
     navigate(`/edit-paste/${pasteId}`);
   };
 
+  const handleNetworkChange = (e) => {
+    setSelectedNetwork(e.target.value);
+  };
+
   if (loading) return <div className="text-center">Loading...</div>;
-  if (error) return <div className="text-red-500 text-center">{error}</div>;
+  if (error) {
+    return (
+      <div className="text-center">
+        <p className="text-red-500 mb-4">{error}</p>
+        <select
+          value={selectedNetwork}
+          onChange={handleNetworkChange}
+          className="bg-gray-700 text-white rounded p-2"
+        >
+          {Object.values(NETWORKS).map((network) => (
+            <option key={network.id} value={network.id}>
+              {network.label}
+            </option>
+          ))}
+        </select>
+      </div>
+    );
+  }
   if (!pasteInfo) return <div className="text-center">No paste found</div>;
 
   return (
@@ -140,6 +165,9 @@ function ViewPaste() {
       <h2 className="text-2xl font-bold mb-4">{pasteInfo.title}</h2>
       {connectedChain && (
         <p className="mb-4">Current network: {getNetworkName(connectedChain.id)}</p>
+      )}
+      {!connectedChain && (
+        <p className="mb-4">Current network: {getNetworkName(selectedNetwork)}</p>
       )}
       {isOwner && (
         <button
@@ -200,7 +228,7 @@ function ViewPaste() {
         </div>
       ) : (
         <>
-          {!wallet ? (
+          {pasteInfo.pasteType !== 'Public' && !wallet ? (
             <div className="mb-4">
               <p>This paste requires wallet connection to access.</p>
               <button
@@ -222,7 +250,9 @@ function ViewPaste() {
           )}
         </>
       )}
-      {wallet && <TipCreator pasteId={pasteId} creator={pasteInfo.creator} />}
+      {wallet && pasteInfo.creator !== wallet.accounts[0].address && (
+        <TipCreator pasteId={pasteId} creator={pasteInfo.creator} />
+      )}
     </div>
   );
 }
