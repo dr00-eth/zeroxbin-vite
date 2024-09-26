@@ -14,7 +14,7 @@ import styles from '../styles/MarkdownStyles.module.css';
 import { useWallet } from '../hooks/useWallet';
 
 function ViewPaste() {
-  const { id: pasteId } = useParams();
+  const { id: pasteId, network: urlNetwork } = useParams();
   const navigate = useNavigate();
   const { wallet, provider, connectedChain, connectWallet } = useWallet();
   const [contract, setContract] = useState(null);
@@ -24,41 +24,48 @@ function ViewPaste() {
   const [error, setError] = useState(null);
   const [hasAccess, setHasAccess] = useState(false);
   const [isOwner, setIsOwner] = useState(false);
-  const [selectedNetwork, setSelectedNetwork] = useState(Object.values(NETWORKS)[0].id);
+  const [selectedNetwork, setSelectedNetwork] = useState(urlNetwork || Object.values(NETWORKS)[0].id);
 
   useEffect(() => {
     initContract();
   }, [provider, connectedChain, selectedNetwork]);
 
   const initContract = async () => {
+    setLoading(true);
+    setError(null);
     let contractProvider;
-    let networkId;
+    let networkId = selectedNetwork;
 
-    if (provider && connectedChain && isNetworkSupported(connectedChain.id)) {
-      contractProvider = provider;
-      networkId = connectedChain.id;
-    } else {
-      const network = Object.values(NETWORKS).find(net => net.id === selectedNetwork);
-      contractProvider = new ethers.JsonRpcProvider(network.rpcUrl);
-      networkId = network.id;
+    try {
+      if (wallet && provider && connectedChain && isNetworkSupported(connectedChain.id)) {
+        contractProvider = provider;
+        networkId = connectedChain.id;
+      } else {
+        const network = Object.values(NETWORKS).find(net => net.id === networkId);
+        if (!network) {
+          throw new Error(`Unsupported network ID: ${networkId}`);
+        }
+        contractProvider = new ethers.JsonRpcProvider(network.rpcUrl);
+      }
+
+      const contractAddress = getContractAddress(networkId);
+      const contractInstance = new ethers.Contract(contractAddress, contractABI, contractProvider);
+      setContract(contractInstance);
+      await fetchPasteData(contractInstance);
+    } catch (err) {
+      console.error('Error initializing contract:', err);
+      setError(`Error initializing contract: ${err.message}`);
+    } finally {
+      setLoading(false);
     }
-
-    const contractAddress = getContractAddress(networkId);
-    const contractInstance = new ethers.Contract(contractAddress, contractABI, contractProvider);
-    setContract(contractInstance);
-    fetchPasteData(contractInstance);
   };
 
   const fetchPasteData = async (contractInstance) => {
     if (!contractInstance || !pasteId) {
-      setLoading(false);
       return;
     }
 
     try {
-      setLoading(true);
-      setError(null);
-
       const pasteData = await contractInstance.getPasteInfo(pasteId);
       
       const formattedInfo = {
@@ -87,9 +94,7 @@ function ViewPaste() {
       }
     } catch (err) {
       console.error('Error fetching paste data:', err);
-      setError('Paste not found on this network. Try selecting a different network.');
-    } finally {
-      setLoading(false);
+      setError('Error fetching paste data: ' + err.message);
     }
   };
 
@@ -135,8 +140,10 @@ function ViewPaste() {
     navigate(`/edit-paste/${pasteId}`);
   };
 
-  const handleNetworkChange = (e) => {
-    setSelectedNetwork(e.target.value);
+  const handleNetworkChange = (event) => {
+    const newNetwork = event.target.value;
+    setSelectedNetwork(newNetwork);
+    navigate(`/paste/${newNetwork}/${pasteId}`);
   };
 
   if (loading) return <div className="text-center">Loading...</div>;
@@ -163,11 +170,24 @@ function ViewPaste() {
   return (
     <div className="shadow-md rounded px-8 pt-6 pb-8 mb-4">
       <h2 className="text-2xl font-bold mb-4">{pasteInfo.title}</h2>
-      {connectedChain && (
+      {wallet && connectedChain ? (
         <p className="mb-4">Current network: {getNetworkName(connectedChain.id)}</p>
-      )}
-      {!connectedChain && (
-        <p className="mb-4">Current network: {getNetworkName(selectedNetwork)}</p>
+      ) : (
+        <div className="mb-4">
+          <label htmlFor="network-select" className="mr-2">Select network:</label>
+          <select
+            id="network-select"
+            value={selectedNetwork}
+            onChange={handleNetworkChange}
+            className="p-2 border rounded"
+          >
+            {Object.values(NETWORKS).map((network) => (
+              <option key={network.id} value={network.id}>
+                {network.label}
+              </option>
+            ))}
+          </select>
+        </div>
       )}
       {isOwner && (
         <button

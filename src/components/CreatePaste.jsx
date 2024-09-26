@@ -95,27 +95,25 @@ function CreatePaste() {
       setError('Wallet not connected. Please connect your wallet.');
       return;
     }
-
+  
     setLoading(true);
     setError('');
     setSuccess(false);
-
+  
     try {
       let tx;
       const tipInWei = ethers.parseEther(tipAmount);
       const expirationTime = expirationDate ? Math.floor(expirationDate.getTime() / 1000) : 0;
-
+  
       let finalContent = content;
       let publicKey = '';
-
+  
       if (pasteType !== 'public') {
         const encryptionKey = generateEncryptionKey();
-        //console.log('Generated encryption key:', encryptionKey);
         finalContent = await encryptContent(content, encryptionKey);
-        //console.log('Encrypted content:', finalContent);
         publicKey = encryptionKey.publicKey;
       }
-
+  
       switch (pasteType) {
         case 'public':
           tx = await contract.createPublicPaste(title, finalContent, expirationTime, publicKey, { value: tipInWei });
@@ -128,13 +126,25 @@ function CreatePaste() {
           tx = await contract.createPrivatePaste(title, ethers.toUtf8Bytes(finalContent), expirationTime, allowedAddresses, publicKey, { value: tipInWei });
           break;
       }
-
-      //console.log('Transaction sent:', tx.hash);
+  
       await tx.wait();
-      //console.log('Transaction confirmed');
       setSuccess(true);
+  
       // Reset form
-      // ... (reset logic remains the same)
+      setTitle('');
+      setContent('');
+      setPasteType('public');
+      setPrice('0');
+      setAllowedAddresses([]);
+      setCurrentAddress('');
+      setTipAmount('0');
+      setExpirationDate(null);
+  
+      // Show success message
+      setTimeout(() => {
+        setSuccess(false);
+      }, 5000); // Clear success message after 5 seconds
+  
     } catch (error) {
       console.error('Error creating paste:', error);
       setError('Error creating paste: ' + error.message);

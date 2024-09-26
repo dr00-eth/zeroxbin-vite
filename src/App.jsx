@@ -62,6 +62,7 @@ function AppContent() {
             <Route path="/explore" element={<ExplorePastes />} />
             <Route path="/my-pastes" element={<UserPastes />} />
             <Route path="/paste/:id" element={<ViewPaste />} />
+            <Route path="/paste/:network/:id" element={<ViewPaste />} />
             <Route path="/edit-paste/:id" element={<EditPaste />} />
           </Routes>
         </div>

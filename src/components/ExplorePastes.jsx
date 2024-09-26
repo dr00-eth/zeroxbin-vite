@@ -2,10 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ethers } from 'ethers';
 import { getContractAddress, contractABI, isNetworkSupported, getNetworkName } from '../contracts/config';
+import { NETWORKS } from '../config';
 import { useWallet } from '../hooks/useWallet';
 
 function ExplorePastes() {
-  const { provider, connectedChain, connectWallet } = useWallet();
+  const { wallet, provider, connectedChain, connectWallet } = useWallet();
   const [contract, setContract] = useState(null);
   const [pastes, setPastes] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -14,23 +15,30 @@ function ExplorePastes() {
   const [pageSize, setPageSize] = useState(25);
   const [hasMore, setHasMore] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedNetwork, setSelectedNetwork] = useState(Object.values(NETWORKS)[0].id);
 
   useEffect(() => {
-    const initContract = async () => {
-      if (provider && connectedChain) {
-        if (isNetworkSupported(connectedChain.id)) {
-          const contractAddress = getContractAddress(connectedChain.id);
-          const contractInstance = new ethers.Contract(contractAddress, contractABI, provider);
-          setContract(contractInstance);
-          setError(null);
-        } else {
-          setError(`Network ${getNetworkName(connectedChain.id)} is not supported. Please switch to a supported network.`);
-        }
-      }
-    };
-
     initContract();
-  }, [provider, connectedChain]);
+  }, [provider, connectedChain, selectedNetwork]);
+
+  const initContract = async () => {
+    let contractProvider;
+    let networkId;
+
+    if (provider && connectedChain && isNetworkSupported(connectedChain.id)) {
+      contractProvider = provider;
+      networkId = connectedChain.id;
+    } else {
+      const network = Object.values(NETWORKS).find(net => net.id === selectedNetwork);
+      contractProvider = new ethers.JsonRpcProvider(network.rpcUrl);
+      networkId = network.id;
+    }
+
+    const contractAddress = getContractAddress(networkId);
+    const contractInstance = new ethers.Contract(contractAddress, contractABI, contractProvider);
+    setContract(contractInstance);
+    setError(null);
+  };
 
   useEffect(() => {
     if (contract) {
@@ -94,6 +102,11 @@ function ExplorePastes() {
     setCurrentPage(1);
   };
 
+  const handleNetworkChange = (event) => {
+    setSelectedNetwork(event.target.value);
+    setCurrentPage(1);
+  };
+
   const getExpirationStatus = expirationTime => {
     if (expirationTime === 'Never') return 'Never expires';
     const expirationDate = new Date(expirationTime);
@@ -109,23 +122,34 @@ function ExplorePastes() {
     }
   };
 
-  if (!provider) {
-    return (
-      <div className="text-center">
-        <p>Please connect your wallet to explore pastes.</p>
-        <button onClick={connectWallet} className="mt-2 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
-          Connect Wallet
-        </button>
-      </div>
-    );
-  }
-
   return (
     <div className="container mx-auto px-4">
       <h2 className="text-2xl font-bold mb-4">Explore Pastes</h2>
-      {connectedChain && (
-        <p className="mb-4">Current network: {getNetworkName(connectedChain.id)}</p>
-      )}
+      <div className="mb-4 flex justify-between items-center">
+        {wallet ? (
+          <p>Current network: {getNetworkName(connectedChain.id)}</p>
+        ) : (
+          <div className="flex items-center">
+            <p className="mr-2">Select network:</p>
+            <select
+              value={selectedNetwork}
+              onChange={handleNetworkChange}
+              className="p-2 border rounded"
+            >
+              {Object.values(NETWORKS).map((network) => (
+                <option key={network.id} value={network.id}>
+                  {network.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+        {!wallet && (
+          <button onClick={connectWallet} className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+            Connect Wallet
+          </button>
+        )}
+      </div>
       <div className="mb-4 flex justify-between items-center">
         <input
           type="text"
@@ -153,7 +177,7 @@ function ExplorePastes() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {pastes.map(paste => (
                 <Link
-                  to={`/paste/${paste.id}`}
+                  to={`/paste/${wallet ? connectedChain.id : selectedNetwork}/${paste.id}`}
                   key={paste.id}
                   className="block p-4 border rounded hover:shadow-lg transition-shadow"
                 >
