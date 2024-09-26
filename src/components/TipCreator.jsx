@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { useConnectWallet } from '@web3-onboard/react';
 import { ethers } from 'ethers';
 import axios from 'axios';
+import { useWallet } from '../hooks/useWallet';
 
 function TipCreator({ pasteId, creator }) {
-  const [{ wallet }] = useConnectWallet();
+  const { wallet, provider } = useWallet();
   const [tipAmount, setTipAmount] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -44,7 +44,6 @@ function TipCreator({ pasteId, creator }) {
     setSuccess(false);
 
     try {
-      const provider = new ethers.BrowserProvider(wallet.provider);
       const signer = await provider.getSigner();
       
       const tx = await signer.sendTransaction({

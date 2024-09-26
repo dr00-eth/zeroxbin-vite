@@ -1,18 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useConnectWallet } from '@web3-onboard/react';
 import { ethers } from 'ethers';
 import MDEditor from '@uiw/react-md-editor';
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
 import Swal from 'sweetalert2';
-import { contractAddress, contractABI } from '../contracts/config';
+import { getContractAddress, contractABI, isNetworkSupported, getNetworkName } from '../contracts/config';
 import { encryptContent } from '../utils/CryptoUtils';
+import { useWallet } from '../hooks/useWallet';
 
 function EditPaste() {
   const { id: pasteId } = useParams();
   const navigate = useNavigate();
-  const [{ wallet }] = useConnectWallet();
+  const { wallet, provider, connectedChain, connectWallet } = useWallet();
   const [contract, setContract] = useState(null);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
@@ -24,42 +24,44 @@ function EditPaste() {
 
   useEffect(() => {
     const initContract = async () => {
-      if (wallet?.provider) {
-        const provider = new ethers.BrowserProvider(wallet.provider);
-        const signer = await provider.getSigner();
-        const contractInstance = new ethers.Contract(contractAddress, contractABI, signer);
-        setContract(contractInstance);
+      if (provider && connectedChain) {
+        if (isNetworkSupported(connectedChain.id)) {
+          const contractAddress = getContractAddress(connectedChain.id);
+          const signer = await provider.getSigner();
+          const contractInstance = new ethers.Contract(contractAddress, contractABI, signer);
+          setContract(contractInstance);
+          setError('');
+          fetchPasteData(contractInstance);
+        } else {
+          setError(`Network ${getNetworkName(connectedChain.id)} is not supported. Please switch to a supported network.`);
+        }
       }
     };
 
     initContract();
-  }, [wallet]);
+  }, [provider, connectedChain, pasteId]);
 
-  useEffect(() => {
-    const fetchPasteData = async () => {
-      if (!contract || !pasteId) return;
+  const fetchPasteData = async (contractInstance) => {
+    if (!contractInstance || !pasteId) return;
 
-      try {
-        const pasteData = await contract.getPaste(pasteId);
-        setTitle(pasteData.title);
-        setContent(ethers.toUtf8String(pasteData.content));
-        setPasteType(['Public', 'Paid', 'Private'][Number(pasteData.pasteType)]);
-        setExpirationDate(pasteData.expirationTime > 0 ? new Date(Number(pasteData.expirationTime) * 1000) : null);
-        setLoading(false);
-      } catch (err) {
-        console.error('Error fetching paste data:', err);
-        setError('Error fetching paste data: ' + err.message);
-        setLoading(false);
-      }
-    };
-
-    fetchPasteData();
-  }, [contract, pasteId]);
+    try {
+      const pasteData = await contractInstance.getPaste(pasteId);
+      setTitle(pasteData.title);
+      setContent(ethers.toUtf8String(pasteData.content));
+      setPasteType(['Public', 'Paid', 'Private'][Number(pasteData.pasteType)]);
+      setExpirationDate(pasteData.expirationTime > 0 ? new Date(Number(pasteData.expirationTime) * 1000) : null);
+      setLoading(false);
+    } catch (err) {
+      console.error('Error fetching paste data:', err);
+      setError('Error fetching paste data: ' + err.message);
+      setLoading(false);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!contract) {
-      setError('Wallet not connected. Please connect your wallet.');
+      setError('Wallet not connected or unsupported network. Please connect your wallet and switch to a supported network.');
       return;
     }
 
@@ -97,7 +99,7 @@ function EditPaste() {
 
   const handleDelete = async () => {
     if (!contract) {
-      setError('Wallet not connected. Please connect your wallet.');
+      setError('Wallet not connected or unsupported network. Please connect your wallet and switch to a supported network.');
       return;
     }
 
@@ -131,7 +133,14 @@ function EditPaste() {
     }
   };
 
-  if (!wallet) return <div className="text-center">Please connect your wallet to edit this paste.</div>;
+  if (!wallet) return (
+    <div className="text-center">
+      <p>Please connect your wallet to edit this paste.</p>
+      <button onClick={connectWallet} className="mt-2 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+        Connect Wallet
+      </button>
+    </div>
+  );
   if (loading) return <div className="text-center">Loading paste data...</div>;
   if (error) return <div className="text-red-500 text-center">{error}</div>;
 

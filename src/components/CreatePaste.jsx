@@ -1,15 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { useConnectWallet } from '@web3-onboard/react';
 import { ethers } from 'ethers';
 import axios from 'axios';
 import DatePicker from 'react-datepicker';
 import MDEditor from '@uiw/react-md-editor';
 import "react-datepicker/dist/react-datepicker.css";
-import { contractAddress, contractABI } from '../contracts/config';
+import { getContractAddress, contractABI, isNetworkSupported, getNetworkName } from '../contracts/config';
 import { generateEncryptionKey, encryptContent } from '../utils/CryptoUtils';
+import { useWallet } from '../hooks/useWallet';
 
 function CreatePaste() {
-  const [{ wallet }] = useConnectWallet();
+  const { wallet, provider, connectedChain, connectWallet } = useWallet();
   const [contract, setContract] = useState(null);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
@@ -27,16 +27,21 @@ function CreatePaste() {
 
   useEffect(() => {
     const initContract = async () => {
-      if (wallet?.provider) {
-        const provider = new ethers.BrowserProvider(wallet.provider);
-        const signer = await provider.getSigner();
-        const contractInstance = new ethers.Contract(contractAddress, contractABI, signer);
-        setContract(contractInstance);
+      if (provider && connectedChain) {
+        if (isNetworkSupported(connectedChain.id)) {
+          const contractAddress = getContractAddress(connectedChain.id);
+          const signer = await provider.getSigner();
+          const contractInstance = new ethers.Contract(contractAddress, contractABI, signer);
+          setContract(contractInstance);
+          setError('');
+        } else {
+          setError(`Network ${getNetworkName(connectedChain.id)} is not supported. Please switch to a supported network.`);
+        }
       }
     };
 
     initContract();
-  }, [wallet]);
+  }, [provider, connectedChain]);
 
   useEffect(() => {
     const fetchEthPrice = async () => {
@@ -137,8 +142,12 @@ function CreatePaste() {
         <div className="bg-blue-100 border-l-4 border-blue-500 text-blue-700 p-4 mb-4" role="alert">
           <p className="font-bold">Wallet Not Connected</p>
           <p>Please connect your wallet to create a paste. You can still fill out the form below.</p>
+          <button onClick={connectWallet} className="mt-2 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+            Connect Wallet
+          </button>
         </div>
       )}
+      {error && <p className="text-red-500 mb-4">{error}</p>}
       {success && <p className="text-green-500 mb-4">Paste created successfully!</p>}
       {error && <p className="text-red-500 mb-4">{error}</p>}
       <form onSubmit={handleSubmit} className="space-y-4">

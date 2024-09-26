@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { useConnectWallet } from '@web3-onboard/react';
-import { ethers } from 'ethers';
 import { Link } from 'react-router-dom';
-import { contractAddress, contractABI } from '../contracts/config';
-import { RPC_URL } from '../config';
+import { ethers } from 'ethers';
+import { getContractAddress, contractABI, isNetworkSupported, getNetworkName } from '../contracts/config';
+import { useWallet } from '../hooks/useWallet';
 
 function ExplorePastes() {
-  const [{ wallet }] = useConnectWallet();
+  const { provider, connectedChain, connectWallet } = useWallet();
   const [contract, setContract] = useState(null);
   const [pastes, setPastes] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -18,20 +17,20 @@ function ExplorePastes() {
 
   useEffect(() => {
     const initContract = async () => {
-      try {
-        const provider = wallet?.provider 
-          ? new ethers.BrowserProvider(wallet.provider) 
-          : new ethers.JsonRpcProvider(RPC_URL);
-        const contractInstance = new ethers.Contract(contractAddress, contractABI, provider);
-        setContract(contractInstance);
-      } catch (err) {
-        console.error('Error initializing contract:', err);
-        setError('Error initializing contract: ' + err.message);
+      if (provider && connectedChain) {
+        if (isNetworkSupported(connectedChain.id)) {
+          const contractAddress = getContractAddress(connectedChain.id);
+          const contractInstance = new ethers.Contract(contractAddress, contractABI, provider);
+          setContract(contractInstance);
+          setError(null);
+        } else {
+          setError(`Network ${getNetworkName(connectedChain.id)} is not supported. Please switch to a supported network.`);
+        }
       }
     };
 
     initContract();
-  }, [wallet]);
+  }, [provider, connectedChain]);
 
   useEffect(() => {
     if (contract) {
@@ -110,12 +109,23 @@ function ExplorePastes() {
     }
   };
 
-  // if (!wallet)
-  //   return <div className="text-center">Please connect your wallet to explore pastes.</div>;
+  if (!provider) {
+    return (
+      <div className="text-center">
+        <p>Please connect your wallet to explore pastes.</p>
+        <button onClick={connectWallet} className="mt-2 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+          Connect Wallet
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto px-4">
       <h2 className="text-2xl font-bold mb-4">Explore Pastes</h2>
+      {connectedChain && (
+        <p className="mb-4">Current network: {getNetworkName(connectedChain.id)}</p>
+      )}
       <div className="mb-4 flex justify-between items-center">
         <input
           type="text"

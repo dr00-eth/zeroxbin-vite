@@ -1,22 +1,32 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Route, Routes, Link } from 'react-router-dom';
-import { Web3OnboardProvider } from '@web3-onboard/react';
+import { Web3OnboardProvider, useAccountCenter } from '@web3-onboard/react';
 import logo from './assets/0xbin-logo.png';
 
 import Home from './components/Home';
 import CreatePaste from './components/CreatePaste';
 import ViewPaste from './components/ViewPaste';
 import UserPastes from './components/UserPastes';
-import ConnectWallet from './components/ConnectWallet';
 import ExplorePastes from './components/ExplorePastes';
 import EditPaste from './components/EditPaste';
+import ConnectWallet from './components/ConnectWallet';
 
 import { web3Onboard } from './config';
 import { useWallet } from './hooks/useWallet';
-import { CHAIN_NAME } from './config';
 
 function AppContent() {
-  const { wallet, chainCorrect, connectWallet, switchNetwork } = useWallet();
+  const { wallet } = useWallet();
+  const updateAccountCenter = useAccountCenter();
+
+  useEffect(() => {
+    // Configure the Account Center
+    updateAccountCenter({
+      enabled: true,
+      position: 'topRight',
+      minimal: false,
+      expanded: true
+    });
+  }, []);
 
   return (
     <Router>
@@ -40,25 +50,10 @@ function AppContent() {
               </div>
               <div className="hidden md:flex items-center space-x-3">
                 <ConnectWallet />
-                {wallet && !chainCorrect && (
-                  <button
-                    onClick={switchNetwork}
-                    className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded"
-                  >
-                    Switch to {CHAIN_NAME}
-                  </button>
-                )}
               </div>
             </div>
           </div>
         </nav>
-
-        {wallet && !chainCorrect && (
-          <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4" role="alert">
-            <p className="font-bold">Wrong Network</p>
-            <p>Please switch to the {CHAIN_NAME} network to use 0xBin.</p>
-          </div>
-        )}
 
         <div className="container mx-auto mt-8 px-4">
           <Routes>

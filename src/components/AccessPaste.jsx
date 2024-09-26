@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { useConnectWallet } from '@web3-onboard/react';
 import { ethers } from 'ethers';
 import { deriveDecryptionKey } from '../utils/CryptoUtils';
+import { useWallet } from '../hooks/useWallet';
 
 function AccessPaste({ contract, pasteId, pasteType, price, publicKey, onAccessGranted }) {
-  const [{ wallet }] = useConnectWallet();
+  const { wallet, provider, connectedChain } = useWallet();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [hasAccess, setHasAccess] = useState(false);
@@ -34,7 +34,6 @@ function AccessPaste({ contract, pasteId, pasteType, price, publicKey, onAccessG
     setLoading(true);
     setError(null);
     try {
-      const provider = new ethers.BrowserProvider(wallet.provider);
       const signer = await provider.getSigner();
       
       if (pasteType === 'Paid' && !hasAccess) {

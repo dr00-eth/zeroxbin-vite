@@ -1,22 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useConnectWallet } from '@web3-onboard/react';
 import { ethers } from 'ethers';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import remarkGfm from 'remark-gfm';
-import { contractAddress, contractABI } from '../contracts/config';
+import { getContractAddress, contractABI, isNetworkSupported, getNetworkName } from '../contracts/config';
 import { decryptContent } from '../utils/CryptoUtils';
 import AccessPaste from './AccessPaste';
 import TipCreator from './TipCreator';
 import styles from '../styles/MarkdownStyles.module.css';
-import { RPC_URL } from '../config';
+import { useWallet } from '../hooks/useWallet';
 
 function ViewPaste() {
   const { id: pasteId } = useParams();
   const navigate = useNavigate();
-  const [{ wallet }, connect] = useConnectWallet();
+  const { wallet, provider, connectedChain, connectWallet } = useWallet();
   const [contract, setContract] = useState(null);
   const [pasteInfo, setPasteInfo] = useState(null);
   const [pasteContent, setPasteContent] = useState(null);
@@ -27,20 +26,20 @@ function ViewPaste() {
 
   useEffect(() => {
     const initContract = async () => {
-      try {
-        const provider = wallet?.provider 
-          ? new ethers.BrowserProvider(wallet.provider)
-          : new ethers.JsonRpcProvider(RPC_URL);
-        const contractInstance = new ethers.Contract(contractAddress, contractABI, provider);
-        setContract(contractInstance);
-      } catch (err) {
-        console.error("Error initializing contract:", err);
-        setError('Error initializing contract: ' + err.message);
+      if (provider && connectedChain) {
+        if (isNetworkSupported(connectedChain.id)) {
+          const contractAddress = getContractAddress(connectedChain.id);
+          const contractInstance = new ethers.Contract(contractAddress, contractABI, provider);
+          setContract(contractInstance);
+          setError(null);
+        } else {
+          setError(`Network ${getNetworkName(connectedChain.id)} is not supported. Please switch to a supported network.`);
+        }
       }
     };
 
     initContract();
-  }, [wallet]);
+  }, [provider, connectedChain]);
 
   useEffect(() => {
     const fetchPasteData = async () => {
@@ -88,7 +87,7 @@ function ViewPaste() {
     };
 
     fetchPasteData();
-  }, [contract, pasteId]);
+  }, [contract, pasteId, wallet]);
 
   const fetchPasteContent = async (pasteType) => {
     if (!contract || !pasteId) return null;
@@ -128,10 +127,6 @@ function ViewPaste() {
     }
   };
 
-  const handleConnectWallet = async () => {
-    await connect();
-  };
-
   const handleEdit = () => {
     navigate(`/edit-paste/${pasteId}`);
   };
@@ -143,14 +138,17 @@ function ViewPaste() {
   return (
     <div className="shadow-md rounded px-8 pt-6 pb-8 mb-4">
       <h2 className="text-2xl font-bold mb-4">{pasteInfo.title}</h2>
+      {connectedChain && (
+        <p className="mb-4">Current network: {getNetworkName(connectedChain.id)}</p>
+      )}
       {isOwner && (
-          <button
-            onClick={handleEdit}
-            className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
-          >
-            Manage Paste
-          </button>
-        )}
+        <button
+          onClick={handleEdit}
+          className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline mb-4"
+        >
+          Manage Paste
+        </button>
+      )}
       <div className="mb-4">
         <p className="text-sm text-gray-300">Created by: {pasteInfo.creator}</p>
         <p className="text-sm text-gray-300">Created at: {pasteInfo.creationTime}</p>
@@ -206,7 +204,7 @@ function ViewPaste() {
             <div className="mb-4">
               <p>This paste requires wallet connection to access.</p>
               <button
-                onClick={handleConnectWallet}
+                onClick={connectWallet}
                 className="mt-2 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
               >
                 Connect Wallet

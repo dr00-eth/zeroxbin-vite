@@ -1,14 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useConnectWallet, useSetChain } from '@web3-onboard/react';
 import { ethers } from 'ethers';
-import { CHAIN_ID, CHAIN_NAME } from '../config';
+import { NETWORKS, CONTRACT_ADDRESSES } from '../config';
 
 export function useWallet() {
   const [{ wallet, connecting }, connect, disconnect] = useConnectWallet();
-  const [{ chains, connectedChain, settingChain }, setChain] = useSetChain();
+  const [{ connectedChain, settingChain }, setChain] = useSetChain();
   const [provider, setProvider] = useState(null);
   const [account, setAccount] = useState(null);
-  const [chainCorrect, setChainCorrect] = useState(false);
+  const [contractAddress, setContractAddress] = useState(null);
 
   useEffect(() => {
     if (wallet?.provider) {
@@ -23,21 +23,25 @@ export function useWallet() {
 
   useEffect(() => {
     if (connectedChain) {
-      setChainCorrect(connectedChain.id === CHAIN_ID);
+      setContractAddress(CONTRACT_ADDRESSES[connectedChain.id]);
     }
   }, [connectedChain]);
 
   const connectWallet = async () => {
     const wallets = await connect();
     if (wallets[0]) {
-      await switchNetwork();
+      await setChain({ chainId: Object.values(NETWORKS)[0].id });
     }
   };
 
-  const switchNetwork = async () => {
-    if (connectedChain?.id !== CHAIN_ID) {
+  const disconnectWallet = async () => {
+    await disconnect(wallet);
+  };
+
+  const switchNetwork = async (chainId) => {
+    if (connectedChain?.id !== chainId) {
       try {
-        await setChain({ chainId: CHAIN_ID });
+        await setChain({ chainId });
       } catch (error) {
         console.error('Error switching network:', error);
       }
@@ -49,9 +53,10 @@ export function useWallet() {
     account,
     provider,
     connecting,
-    chainCorrect,
+    contractAddress,
+    connectedChain,
     connectWallet,
-    switchNetwork,
-    disconnect
+    disconnectWallet,
+    switchNetwork
   };
 }
