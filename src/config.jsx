@@ -6,12 +6,14 @@ const injected = injectedModule();
 export const RPC_URL = import.meta.env.VITE_RPC_URL;
 export const CONTRACT_ADDRESS = import.meta.env.VITE_CONTRACT_ADDRESS;
 export const CONTRACT_ABI = JSON.parse(import.meta.env.VITE_CONTRACT_ABI);
+export const CHAIN_ID = '0x66eee'; // Arbitrum Sepolia chain ID
+export const CHAIN_NAME = 'Arbitrum Sepolia';
 
 export const chains = [
   {
-    id: '0x66eee',
+    id: CHAIN_ID,
     token: 'ETH',
-    label: 'Arbitrum Sepolia',
+    label: CHAIN_NAME,
     rpcUrl: RPC_URL,
   },
 ];
