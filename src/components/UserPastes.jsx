@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ethers } from 'ethers';
-import { getContractAddress, contractABI, isNetworkSupported, getNetworkName } from '../contracts/config';
+import { getContractAddress, getContractABI, isNetworkSupported, getNetworkName } from '../contracts/config';
 import { useWallet } from '../hooks/useWallet';
 
 function UserPastes() {
@@ -18,6 +18,7 @@ function UserPastes() {
       if (provider && connectedChain) {
         if (isNetworkSupported(connectedChain.id)) {
           const contractAddress = getContractAddress(connectedChain.id);
+          const contractABI = getContractABI(connectedChain.id);
           const signer = await provider.getSigner();
           const contractInstance = new ethers.Contract(contractAddress, contractABI, signer);
           setContract(contractInstance);
@@ -55,23 +56,15 @@ function UserPastes() {
       console.log("Paste IDs:", pasteIds);
       const pastesData = await Promise.all(pasteIds.map(async (id) => {
         console.log("Fetching paste with ID:", id.toString());
-        const paste = await contract.getPaste(id);
-        console.log("Raw paste data:", paste);
-        
-        let creationTime;
-        if (typeof paste.creationTime === 'bigint') {
-          creationTime = Number(paste.creationTime);
-        } else if (typeof paste.creationTime === 'number') {
-          creationTime = paste.creationTime;
-        } else {
-          creationTime = Number(paste.creationTime);
-        }
+        const pasteInfo = await contract.pastes(id);
+        console.log("Raw paste info:", pasteInfo);
         
         return {
           id: id.toString(),
-          title: paste.title,
-          creationTime: new Date(creationTime * 1000).toLocaleString(),
-          pasteType: ['Public', 'Paid', 'Private'][Number(paste.pasteType)]
+          title: pasteInfo.title,
+          creationTime: new Date(Number(pasteInfo.creationTime) * 1000).toLocaleString(),
+          pasteType: ['Public', 'Paid', 'Private'][Number(pasteInfo.pasteType)],
+          currentVersion: Number(pasteInfo.currentVersion)
         };
       }));
       console.log("Fetched pastes data:", pastesData);
@@ -102,7 +95,8 @@ function UserPastes() {
           title: paste.title,
           creationTime: new Date(Number(paste.creationTime) * 1000).toLocaleString(),
           pasteType: ['Public', 'Paid', 'Private'][Number(paste.pasteType)],
-          creator: paste.creator
+          creator: paste.creator,
+          currentVersion: Number(paste.currentVersion)
         }))
         .filter(paste => paste.creator.toLowerCase() !== account.toLowerCase());
 
@@ -157,6 +151,7 @@ function UserPastes() {
                 </Link>
                 <p className="text-sm text-gray-100">Created: {paste.creationTime}</p>
                 <p className="text-sm text-gray-100">Type: {paste.pasteType}</p>
+                <p className="text-sm text-gray-100">Current Version: {paste.currentVersion}</p>
               </div>
               <button
                 onClick={() => handleEdit(paste.id)}
@@ -182,6 +177,7 @@ function UserPastes() {
               <p className="text-sm text-gray-100">Created by: {paste.creator.slice(0, 6)}...{paste.creator.slice(-4)}</p>
               <p className="text-sm text-gray-100">Created: {paste.creationTime}</p>
               <p className="text-sm text-gray-100">Type: {paste.pasteType}</p>
+              <p className="text-sm text-gray-100">Current Version: {paste.currentVersion}</p>
             </li>
           ))}
         </ul>

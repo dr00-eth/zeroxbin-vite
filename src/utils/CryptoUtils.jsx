@@ -3,19 +3,24 @@ import { ethers } from 'ethers';
 export function generateEncryptionKey() {
   const privateKey = ethers.randomBytes(32);
   const publicKey = ethers.hexlify(privateKey);
-  return { privateKey, publicKey };
+  console.log('Generated encryption key:', publicKey);
+  return publicKey;
 }
 
-export async function encryptContent(content, encryptionKey) {
+export async function encryptContent(content, publicKey) {
   console.log('Encrypting content');
+  console.log('Content to encrypt:', content);
+  console.log('Public key for encryption:', publicKey);
   try {
     const encoder = new TextEncoder();
     const data = encoder.encode(content);
 
     const iv = crypto.getRandomValues(new Uint8Array(12));
+    const keyData = ethers.getBytes(publicKey);
+
     const key = await crypto.subtle.importKey(
       'raw',
-      encryptionKey.privateKey,
+      keyData,
       { name: 'AES-GCM', length: 256 },
       false,
       ['encrypt']
@@ -38,22 +43,22 @@ export async function encryptContent(content, encryptionKey) {
   }
 }
 
-export async function decryptContent(encryptedContent, decryptionKey) {
+export async function decryptContent(encryptedContent, publicKey, signature) {
   console.log('Decrypting content');
   console.log('Encrypted content:', encryptedContent);
-  console.log('Decryption key:', decryptionKey);
+  console.log('Public key:', publicKey);
+  console.log('Signature:', signature);
   try {
     const encryptedData = ethers.getBytes(encryptedContent);
-    console.log('Encrypted data length:', encryptedData.length);
     const iv = encryptedData.slice(0, 12);
     const data = encryptedData.slice(12);
 
-    console.log('IV:', ethers.hexlify(iv));
-    console.log('Data length:', data.length);
+    // Derive the actual decryption key using both publicKey and signature
+    const decryptionKey = await deriveDecryptionKey(publicKey, signature);
 
     const key = await crypto.subtle.importKey(
       'raw',
-      ethers.getBytes(decryptionKey),
+      decryptionKey,
       { name: 'AES-GCM', length: 256 },
       false,
       ['decrypt']
@@ -66,13 +71,34 @@ export async function decryptContent(encryptedContent, decryptionKey) {
     );
 
     const decoder = new TextDecoder();
-    return decoder.decode(decryptedContent);
+    const result = decoder.decode(decryptedContent);
+    console.log('Decrypted content:', result);
+    return result;
   } catch (error) {
     console.error('Error in decryptContent:', error);
-    console.error('Error name:', error.name);
-    console.error('Error message:', error.message);
-    console.error('Error stack:', error.stack);
     throw error;
+  }
+}
+
+export function generateMessageToSign(pasteId, address) {
+  const message = ethers.solidityPackedKeccak256(["uint256", "address"], [pasteId, address]);
+  console.log('Generated message to sign:', message);
+  return message;
+}
+
+export function verifySignature(message, signature, expectedSigner) {
+  try {
+    const recoveredAddress = ethers.verifyMessage(ethers.getBytes(message), signature);
+    console.log('Signature verification:', {
+      message,
+      signature,
+      expectedSigner,
+      recoveredAddress
+    });
+    return recoveredAddress.toLowerCase() === expectedSigner.toLowerCase();
+  } catch (error) {
+    console.error('Error verifying signature:', error);
+    return false;
   }
 }
 
@@ -81,26 +107,7 @@ export async function deriveDecryptionKey(publicKey, signature) {
   console.log('Public key:', publicKey);
   console.log('Signature:', signature);
   
-  // In this case, we're using the public key directly as the decryption key
-  // This assumes that the public key is actually the private key used for encryption
-  return publicKey;
-}
-
-export async function testEncryptDecrypt(content) {
-  const encryptionKey = generateEncryptionKey();
-  console.log('Generated encryption key:', encryptionKey);
-
-  const encryptedContent = await encryptContent(content, encryptionKey);
-  console.log('Encrypted content:', encryptedContent);
-
-  // Simulate the signature process (not actually used in this simplified version)
-  const signature = ethers.randomBytes(65);
-  const derivedKey = await deriveDecryptionKey(encryptionKey.publicKey, ethers.hexlify(signature));
-  
-  console.log('Derived key:', derivedKey);
-
-  const decryptedContent = await decryptContent(encryptedContent, derivedKey);
-  console.log('Decrypted content:', decryptedContent);
-
-  return decryptedContent === content;
+  // Use both publicKey and signature to derive the actual decryption key
+  const combinedKey = ethers.keccak256(ethers.concat([ethers.getBytes(publicKey), ethers.getBytes(signature)]));
+  return ethers.getBytes(combinedKey);
 }

@@ -1,10 +1,12 @@
-import { NETWORKS, CONTRACT_ADDRESSES, CONTRACT_ABI } from '../config';
+import { NETWORKS, CONTRACT_ADDRESSES, CONTRACT_ABI, TESTNET_CONTRACT_ABI } from '../config';
 
 export const getContractAddress = (chainId) => {
   return CONTRACT_ADDRESSES[chainId] || null;
 };
 
-export const contractABI = CONTRACT_ABI;
+export const getContractABI = (chainId) => {
+  return chainId == '0x66eee' ? TESTNET_CONTRACT_ABI : CONTRACT_ABI;
+};
 
 export const getSupportedNetworks = () => {
   return Object.values(NETWORKS);

@@ -4,7 +4,7 @@ import axios from 'axios';
 import DatePicker from 'react-datepicker';
 import MDEditor from '@uiw/react-md-editor';
 import "react-datepicker/dist/react-datepicker.css";
-import { getContractAddress, contractABI, isNetworkSupported, getNetworkName } from '../contracts/config';
+import { getContractAddress, getContractABI, isNetworkSupported, getNetworkName } from '../contracts/config';
 import { generateEncryptionKey, encryptContent } from '../utils/CryptoUtils';
 import { useWallet } from '../hooks/useWallet';
 
@@ -13,7 +13,7 @@ function CreatePaste() {
   const [contract, setContract] = useState(null);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
-  const [pasteType, setPasteType] = useState('public');
+  const [pasteType, setPasteType] = useState('Public');
   const [price, setPrice] = useState('0');
   const [allowedAddresses, setAllowedAddresses] = useState([]);
   const [currentAddress, setCurrentAddress] = useState('');
@@ -31,6 +31,7 @@ function CreatePaste() {
         try {
           if (isNetworkSupported(connectedChain.id)) {
             const contractAddress = getContractAddress(connectedChain.id);
+            const contractABI = getContractABI(connectedChain.id);
             const signer = await provider.getSigner();
             const contractInstance = new ethers.Contract(contractAddress, contractABI, signer);
             setContract(contractInstance);
@@ -101,39 +102,62 @@ function CreatePaste() {
     setSuccess(false);
   
     try {
-      let tx;
       const tipInWei = ethers.parseEther(tipAmount);
       const expirationTime = expirationDate ? Math.floor(expirationDate.getTime() / 1000) : 0;
   
-      let finalContent = content;
+      let finalContent;
       let publicKey = '';
   
-      if (pasteType !== 'public') {
+      if (pasteType === 'Public') {
+        finalContent = ethers.toUtf8Bytes(content);
+      } else {
+        console.log('Creating encrypted paste');
         const encryptionKey = generateEncryptionKey();
+        console.log('Generated encryption key:', encryptionKey);
         finalContent = await encryptContent(content, encryptionKey);
-        publicKey = encryptionKey.publicKey;
+        publicKey = encryptionKey;
+        console.log('Encrypted content:', finalContent);
+        console.log('Public key to be stored:', publicKey);
       }
   
-      switch (pasteType) {
-        case 'public':
-          tx = await contract.createPublicPaste(title, finalContent, expirationTime, publicKey, { value: tipInWei });
-          break;
-        case 'paid':
-          const priceInWei = ethers.parseEther(price);
-          tx = await contract.createPaidPaste(title, ethers.toUtf8Bytes(finalContent), expirationTime, priceInWei, publicKey, { value: tipInWei });
-          break;
-        case 'private':
-          tx = await contract.createPrivatePaste(title, ethers.toUtf8Bytes(finalContent), expirationTime, allowedAddresses, publicKey, { value: tipInWei });
-          break;
+      const pasteTypeEnum = ['Public', 'Paid', 'Private'].indexOf(pasteType);
+      if (pasteTypeEnum === -1) {
+        throw new Error('Invalid paste type');
       }
+      
+      const priceInWei = ethers.parseEther(price);
+
+      console.log('Submitting paste to contract:', {
+        title,
+        content: finalContent,
+        expirationTime,
+        pasteTypeEnum,
+        priceInWei,
+        publicKey,
+        allowedAddresses: pasteType === 'Private' ? allowedAddresses : []
+      });
+
+      // Use the consolidated createPaste function
+      const tx = await contract.createPaste(
+        title,
+        finalContent,
+        expirationTime,
+        pasteTypeEnum,
+        priceInWei,
+        publicKey,
+        pasteType === 'Private' ? allowedAddresses : [],
+        { value: tipInWei }
+      );
   
+      console.log('Transaction sent:', tx.hash);
       await tx.wait();
+      console.log('Transaction confirmed');
       setSuccess(true);
   
       // Reset form
       setTitle('');
       setContent('');
-      setPasteType('public');
+      setPasteType('Public');
       setPrice('0');
       setAllowedAddresses([]);
       setCurrentAddress('');
@@ -170,7 +194,6 @@ function CreatePaste() {
       {error && <p className="text-red-500 mb-4">{error}</p>}
       {success && <p className="text-green-500 mb-4">Paste created successfully!</p>}
       <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Title input */}
         <div>
           <label className="block text-white-700 text-sm font-bold mb-2" htmlFor="title">
             Paste Title
@@ -186,7 +209,6 @@ function CreatePaste() {
           />
         </div>
 
-        {/* Content input */}
         <div>
           <label className="block text-white-700 text-sm font-bold mb-2" htmlFor="content">
             Paste Content
@@ -199,7 +221,6 @@ function CreatePaste() {
           />
         </div>
 
-        {/* Paste Type selection */}
         <div>
           <label className="block text-white-700 text-sm font-bold mb-2" htmlFor="pasteType">
             Paste Type
@@ -210,13 +231,12 @@ function CreatePaste() {
             value={pasteType}
             onChange={(e) => setPasteType(e.target.value)}
           >
-            <option value="public">Public</option>
-            <option value="paid">Paid</option>
-            <option value="private">Private</option>
+            <option value="Public">Public</option>
+            <option value="Paid">Paid</option>
+            <option value="Private">Private</option>
           </select>
         </div>
 
-        {/* Expiration Date input */}
         <div>
           <label className="block text-white-700 text-sm font-bold mb-2" htmlFor="expirationDate">
             Expiration Date/Time (optional)
@@ -235,8 +255,7 @@ function CreatePaste() {
           />
         </div>
 
-        {/* Price input for Paid pastes */}
-        {pasteType === 'paid' && (
+        {pasteType === 'Paid' && (
           <div>
             <label className="block text-white-700 text-sm font-bold mb-2" htmlFor="price">
               Access Price (ETH)
@@ -258,8 +277,7 @@ function CreatePaste() {
           </div>
         )}
 
-        {/* Allowed Addresses input for Private pastes */}
-        {pasteType === 'private' && (
+        {pasteType === 'Private' && (
           <div>
             <label className="block text-white-700 text-sm font-bold mb-2" htmlFor="allowedAddresses">
               Allowed Addresses
@@ -299,7 +317,6 @@ function CreatePaste() {
           </div>
         )}
 
-        {/* Tip input */}
         <div>
           <label className="block text-white-700 text-sm font-bold mb-2" htmlFor="tip">
             Tip the Devs (optional)
@@ -320,7 +337,6 @@ function CreatePaste() {
           )}
         </div>
 
-        {/* Submit button */}
         <div>
           <button
             type="submit"

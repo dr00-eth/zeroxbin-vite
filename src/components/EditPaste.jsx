@@ -1,37 +1,43 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { ethers } from 'ethers';
 import MDEditor from '@uiw/react-md-editor';
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
 import Swal from 'sweetalert2';
-import { getContractAddress, contractABI, isNetworkSupported, getNetworkName } from '../contracts/config';
-import { encryptContent } from '../utils/CryptoUtils';
+import { getContractAddress, getContractABI, isNetworkSupported, getNetworkName } from '../contracts/config';
+import { encryptContent, decryptContent, generateMessageToSign, deriveDecryptionKey } from '../utils/CryptoUtils';
 import { useWallet } from '../hooks/useWallet';
 
 function EditPaste() {
   const { id: pasteId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { wallet, provider, connectedChain, connectWallet } = useWallet();
   const [contract, setContract] = useState(null);
+  const [pasteInfo, setPasteInfo] = useState(null);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [pasteType, setPasteType] = useState('');
   const [expirationDate, setExpirationDate] = useState(null);
+  const [publicKey, setPublicKey] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [hasAccess, setHasAccess] = useState(false);
+  const [currentVersion, setCurrentVersion] = useState(null);
 
   useEffect(() => {
     const initContract = async () => {
       if (provider && connectedChain) {
         if (isNetworkSupported(connectedChain.id)) {
           const contractAddress = getContractAddress(connectedChain.id);
+          const contractABI = getContractABI(connectedChain.id);
           const signer = await provider.getSigner();
           const contractInstance = new ethers.Contract(contractAddress, contractABI, signer);
           setContract(contractInstance);
           setError('');
-          fetchPasteData(contractInstance);
+          await fetchPasteData(contractInstance);
         } else {
           setError(`Network ${getNetworkName(connectedChain.id)} is not supported. Please switch to a supported network.`);
         }
@@ -45,16 +51,76 @@ function EditPaste() {
     if (!contractInstance || !pasteId) return;
 
     try {
-      const pasteData = await contractInstance.getPaste(pasteId);
-      setTitle(pasteData.title);
-      setContent(ethers.toUtf8String(pasteData.content));
-      setPasteType(['Public', 'Paid', 'Private'][Number(pasteData.pasteType)]);
-      setExpirationDate(pasteData.expirationTime > 0 ? new Date(Number(pasteData.expirationTime) * 1000) : null);
+      // First, fetch the paste info to get the current version
+      const pasteInfoResult = await contractInstance.pastes(pasteId);
+      const currentVersion = Number(pasteInfoResult.currentVersion);
+      setCurrentVersion(currentVersion);
+
+      // Now fetch the paste with the current version
+      const result = await contractInstance.getPaste(pasteId, currentVersion);
+      const [pasteInfo, pasteContent, access] = result;
+
+      setPasteInfo(pasteInfo);
+      setTitle(pasteInfo.title);
+      const pasteTypeValue = Number(pasteInfo.pasteType);
+      setPasteType(['Public', 'Paid', 'Private'][pasteTypeValue]);
+      setExpirationDate(pasteInfo.expirationTime > 0 ? new Date(Number(pasteInfo.expirationTime) * 1000) : null);
+      setPublicKey(pasteInfo.publicKey);
+      setHasAccess(access);
+
+      console.log('Paste Info:', pasteInfo);
+      console.log('Public Key:', pasteInfo.publicKey);
+
+      if (access) {
+        if (pasteTypeValue === 0) { // Public paste
+          setContent(ethers.toUtf8String(pasteContent));
+        } else {
+          await handleAccessGranted(pasteContent, pasteInfo.publicKey);
+        }
+      }
+
       setLoading(false);
     } catch (err) {
       console.error('Error fetching paste data:', err);
       setError('Error fetching paste data: ' + err.message);
       setLoading(false);
+    }
+  };
+
+  const handleAccessGranted = async (encryptedContent, publicKey) => {
+    try {
+      if (!wallet || !provider) {
+        throw new Error('Wallet not connected');
+      }
+
+      if (!publicKey) {
+        throw new Error('Public key is missing');
+      }
+
+      const signer = await provider.getSigner();
+      const address = await signer.getAddress();
+      const message = generateMessageToSign(pasteId, address);
+      const signature = await signer.signMessage(ethers.getBytes(message));
+
+      console.log('Deriving decryption key with public key:', publicKey);
+      const decryptionKey = await deriveDecryptionKey(publicKey, signature);
+      
+      if (!decryptionKey) {
+        throw new Error('Failed to derive decryption key');
+      }
+
+      const contentToDecrypt = typeof encryptedContent === 'string' ? encryptedContent : ethers.toUtf8String(encryptedContent);
+      console.log('Decrypting content:', contentToDecrypt);
+      const decryptedContent = await decryptContent(contentToDecrypt, decryptionKey);
+      
+      if (!decryptedContent) {
+        throw new Error('Failed to decrypt content');
+      }
+
+      setContent(decryptedContent);
+    } catch (err) {
+      console.error('Error handling access granted:', err);
+      setError('Error handling access granted: ' + err.message);
     }
   };
 
@@ -70,12 +136,17 @@ function EditPaste() {
     setSuccess(false);
 
     try {
-      let finalContent = content;
-      if (pasteType !== 'Public') {
-        finalContent = await encryptContent(content, pasteInfo.publicKey);
+      let finalContent;
+      if (pasteType === 'Public') {
+        finalContent = ethers.toUtf8Bytes(content);
+      } else {
+        console.log('Encrypting content for non-public paste');
+        console.log('Public key used for encryption:', publicKey);
+        finalContent = await encryptContent(content, publicKey);
       }
 
-      const tx = await contract.updatePaste(pasteId, ethers.toUtf8Bytes(finalContent));
+      console.log('Updating paste with content:', finalContent);
+      const tx = await contract.updatePaste(pasteId, finalContent);
       await tx.wait();
       setSuccess(true);
       Swal.fire({
@@ -143,6 +214,7 @@ function EditPaste() {
   );
   if (loading) return <div className="text-center">Loading paste data...</div>;
   if (error) return <div className="text-red-500 text-center">{error}</div>;
+  if (!hasAccess) return <div className="text-center">You don't have access to edit this paste.</div>;
 
   return (
     <div className="shadow-md rounded px-8 pt-6 pb-8 mb-4">
@@ -156,17 +228,14 @@ function EditPaste() {
             className="shadow appearance-none border rounded w-full py-2 px-3 text-white-700 leading-tight focus:outline-none focus:shadow-outline"
             id="title"
             type="text"
-            value={title + ` (Cannot Edit)`}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Paste Title"
-            required
+            value={title}
             disabled
           />
         </div>
 
         <div>
           <label className="block text-white-700 text-sm font-bold mb-2" htmlFor="content">
-            Paste Content
+            Paste Content (Version {currentVersion})
           </label>
           <MDEditor
             value={content}
@@ -184,7 +253,7 @@ function EditPaste() {
             className="shadow appearance-none border rounded w-full py-2 px-3 text-white-700 leading-tight focus:outline-none focus:shadow-outline"
             id="pasteType"
             type="text"
-            value={pasteType + ` (Cannot Edit)`}
+            value={pasteType}
             disabled
           />
         </div>
@@ -202,7 +271,7 @@ function EditPaste() {
             timeCaption="time"
             dateFormat="MMMM d, yyyy h:mm aa"
             minDate={new Date()}
-            placeholderText={expirationDate ? expirationDate.toLocaleString() : "Cannot Edit"}
+            placeholderText={expirationDate ? expirationDate.toLocaleString() : "Never"}
             className="shadow appearance-none border rounded w-full py-2 px-3 text-white-700 leading-tight focus:outline-none focus:shadow-outline"
             disabled
           />

@@ -1,32 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { ethers } from 'ethers';
-import { deriveDecryptionKey } from '../utils/CryptoUtils';
 import { useWallet } from '../hooks/useWallet';
+import { generateMessageToSign } from '../utils/CryptoUtils';
 
 function AccessPaste({ contract, pasteId, pasteType, price, publicKey, onAccessGranted }) {
-  const { wallet, provider, connectedChain } = useWallet();
+  const { wallet, provider } = useWallet();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [hasAccess, setHasAccess] = useState(false);
-
-  useEffect(() => {
-    const checkAccess = async () => {
-      if (!contract || !wallet) return;
-
-      try {
-        const pasteData = await contract.getPaste(pasteId);
-        setHasAccess(pasteData.hasAccess);
-      } catch (err) {
-        console.error('Error checking access:', err);
-        setError('Error checking access: ' + err.message);
-      }
-    };
-
-    checkAccess();
-  }, [contract, pasteId, wallet]);
 
   const handleAccess = async () => {
-    if (!contract || !wallet) {
+    if (!contract || !wallet || !provider) {
       setError('Wallet not connected. Please connect your wallet.');
       return;
     }
@@ -35,8 +18,9 @@ function AccessPaste({ contract, pasteId, pasteType, price, publicKey, onAccessG
     setError(null);
     try {
       const signer = await provider.getSigner();
+      const address = await signer.getAddress();
       
-      if (pasteType === 'Paid' && !hasAccess) {
+      if (pasteType === 'Paid') {
         console.log('Attempting to pay for access');
         const tx = await contract.accessPaste(pasteId, { value: ethers.parseEther(price) });
         console.log('Payment transaction sent:', tx.hash);
@@ -45,14 +29,12 @@ function AccessPaste({ contract, pasteId, pasteType, price, publicKey, onAccessG
       }
 
       console.log('Generating signature');
-      const message = ethers.solidityPackedKeccak256(["uint256", "address"], [pasteId, await signer.getAddress()]);
+      const message = generateMessageToSign(pasteId, address);
       const signature = await signer.signMessage(ethers.getBytes(message));
       
-      console.log('Deriving decryption key');
-      const decryptionKey = await deriveDecryptionKey(publicKey, signature);
-      
       console.log('Access granted, calling onAccessGranted');
-      onAccessGranted(decryptionKey);
+      console.log('Signature:', signature);
+      onAccessGranted(signature);
     } catch (err) {
       console.error('Error accessing paste:', err);
       setError(`Error accessing paste: ${err.message}`);
@@ -60,16 +42,10 @@ function AccessPaste({ contract, pasteId, pasteType, price, publicKey, onAccessG
     setLoading(false);
   };
 
-  if (hasAccess) {
+  if (!wallet) {
     return (
       <div className="mb-4">
-        <button
-          onClick={handleAccess}
-          disabled={loading}
-          className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
-        >
-          {loading ? 'Signing...' : 'Sign to Access Paste'}
-        </button>
+        <p>Please connect your wallet to access this paste.</p>
       </div>
     );
   }

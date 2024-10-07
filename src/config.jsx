@@ -10,6 +10,12 @@ export const NETWORKS = {
     label: 'Arbitrum One',
     rpcUrl: import.meta.env.VITE_ARBITRUM_RPC_URL,
   },
+  ARBITRUM_SEPOLIA: {
+    id: '0x66eee',
+    token: 'ETH',
+    label: 'Arbitrum Sepolia Testnet',
+    rpcUrl: import.meta.env.VITE_ARBITRUM_SEPOLIA_RPC_URL,
+  },
 };
 
 export const UNUSED_NETWORKS = {
@@ -40,7 +46,8 @@ export const UNUSED_NETWORKS = {
 };
 
 export const CONTRACT_ADDRESSES = {
-  [NETWORKS.ARBITRUM_ONE.id]: import.meta.env.VITE_ARBITRUM_CONTRACT_ADDRESS
+  [NETWORKS.ARBITRUM_ONE.id]: import.meta.env.VITE_ARBITRUM_CONTRACT_ADDRESS,
+  [NETWORKS.ARBITRUM_SEPOLIA.id]: import.meta.env.VITE_ARBITRUM_SEPOLIA_CONTRACT_ADDRESS
 };
 
 export const UNUSED_CONTRACT_ADDRESSES = {
@@ -52,6 +59,7 @@ export const UNUSED_CONTRACT_ADDRESSES = {
 
 
 export const CONTRACT_ABI = JSON.parse(import.meta.env.VITE_CONTRACT_ABI);
+export const TESTNET_CONTRACT_ABI = JSON.parse(import.meta.env.VITE_TESTNET_CONTRACT_ABI);
 
 export const chains = Object.values(NETWORKS);
 

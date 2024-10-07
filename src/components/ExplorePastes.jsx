@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ethers } from 'ethers';
-import { getContractAddress, contractABI, isNetworkSupported, getNetworkName } from '../contracts/config';
+import { getContractAddress, getContractABI, isNetworkSupported, getNetworkName } from '../contracts/config';
 import { NETWORKS } from '../config';
 import { useWallet } from '../hooks/useWallet';
 
@@ -15,26 +15,37 @@ function ExplorePastes() {
   const [pageSize, setPageSize] = useState(25);
   const [hasMore, setHasMore] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedNetwork, setSelectedNetwork] = useState(Object.values(NETWORKS)[0].id);
+  const [selectedNetwork, setSelectedNetwork] = useState(null);
 
   useEffect(() => {
-    initContract();
+    // Initialize the selected network
+    if (connectedChain && isNetworkSupported(connectedChain.id)) {
+      setSelectedNetwork(connectedChain.id);
+    } else if (!selectedNetwork) {
+      setSelectedNetwork(Object.values(NETWORKS)[0].id);
+    }
+  }, [connectedChain, selectedNetwork]);
+
+  useEffect(() => {
+    if (selectedNetwork) {
+      initContract();
+    }
   }, [provider, connectedChain, selectedNetwork]);
 
   const initContract = async () => {
     let contractProvider;
-    let networkId;
+    let networkId = selectedNetwork;
 
     if (provider && connectedChain && isNetworkSupported(connectedChain.id)) {
       contractProvider = provider;
       networkId = connectedChain.id;
     } else {
-      const network = Object.values(NETWORKS).find(net => net.id === selectedNetwork);
+      const network = Object.values(NETWORKS).find(net => net.id === networkId);
       contractProvider = new ethers.JsonRpcProvider(network.rpcUrl);
-      networkId = network.id;
     }
 
     const contractAddress = getContractAddress(networkId);
+    const contractABI = getContractABI(networkId);
     const contractInstance = new ethers.Contract(contractAddress, contractABI, contractProvider);
     setContract(contractInstance);
     setError(null);
